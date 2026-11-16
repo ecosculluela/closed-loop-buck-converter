@@ -9,41 +9,20 @@ DC-DC buck converter using LTspice.
 |---|---|
 | Input voltage | 12 V |
 | Output voltage | 5 V |
-| Maximum current | 0.5 A |
+| Output current | 0.5 A |
 | Switching frequency | 100 kHz |
+| Control | Voltage-mode |
 | Topology | Nonsynchronous buck |
-| Control | Voltage-mode PWM |
 
-## Project Objectives
+## Design Process
 
-- Design the buck power stage from first principles
-- Calculate the inductor and output capacitor
-- Simulate the open-loop converter
-- Design the feedback network
-- Implement closed-loop voltage control
-- Test line and load transients
-- Analyze losses and efficiency
-
-
-## Design Requirements
-
-VIN = 12 V
-
-VOUT = 5 V
-
-IOUT,max = 0.5 A
-
-fSW = 100 kHz
-
-Output power = 2.5 W
-
-
-## Initial Calculations
-
-Ideal duty cycle:
-
-D = VOUT / VIN
-
-D = 5 / 12
-
-D = 0.417 = 41.7%
+1. Define requirements
+2. Calculate duty cycle
+3. Select L and C
+4. Build open-loop converter
+5. Add voltage feedback
+6. Add PI controller
+7. Implement PWM
+8. Close feedback loop
+9. Perform load-step test
+10. Analyze efficiency
