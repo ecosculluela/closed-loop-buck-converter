@@ -1,8 +1,8 @@
 # Closed-Loop Buck Converter
 
 Design and LTspice simulation of a closed-loop nonsynchronous buck converter using voltage-mode PWM control.
-
-The goal of this project is to design the converter from first principles, verify the power stage in open-loop operation, implement voltage feedback and compensation, and evaluate the converter under steady-state and transient operating conditions.
+ 
+This project was created to put into practice and further develop the power electronics knowledge I have gained throughout my professional career. Starting from first principles, I will design and verify the open-loop power stage, implement voltage feedback and compensation, and evaluate the converter's closed-loop behavior under steady-state and transient conditions.
 
 ---
 
