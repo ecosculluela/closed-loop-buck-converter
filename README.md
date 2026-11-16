@@ -23,3 +23,27 @@ DC-DC buck converter using LTspice.
 - Implement closed-loop voltage control
 - Test line and load transients
 - Analyze losses and efficiency
+
+
+## Design Requirements
+
+VIN = 12 V
+
+VOUT = 5 V
+
+IOUT,max = 0.5 A
+
+fSW = 100 kHz
+
+Output power = 2.5 W
+
+
+## Initial Calculations
+
+Ideal duty cycle:
+
+D = VOUT / VIN
+
+D = 5 / 12
+
+D = 0.417 = 41.7%
