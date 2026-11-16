@@ -1,7 +1,7 @@
 # Closed-Loop Buck Converter
 
 Design and LTspice simulation of a closed-loop nonsynchronous buck converter using voltage-mode PWM control.
- 
+
 This project was created to put into practice and further develop the power electronics knowledge I have gained throughout my professional career. Starting from first principles, I will design and verify the open-loop power stage, implement voltage feedback and compensation, and evaluate the converter's closed-loop behavior under steady-state and transient conditions.
 
 ---
@@ -32,7 +32,7 @@ This project was created to put into practice and further develop the power elec
 | Output current | 0.1–0.5 A |
 | Maximum output power | 2.5 W |
 | Switching frequency | 100 kHz |
-| Output ripple target | <50 mVpp |
+| Output ripple target | < 50 mV<sub>pp</sub> |
 | Inductor ripple target | ~30% of full-load current |
 | Topology | Nonsynchronous buck |
 | Control method | Voltage-mode PWM |
@@ -40,7 +40,9 @@ This project was created to put into practice and further develop the power elec
 
 The regulated output-voltage target is therefore:
 
-4.90 V ≤ VOUT ≤ 5.10 V
+$$
+4.90\ \text{V} \le V_{OUT} \le 5.10\ \text{V}
+$$
 
 ---
 
@@ -54,25 +56,23 @@ The converter will also be evaluated under changing operating conditions.
 
 Initial target:
 
-- Peak output deviation: <10%
-- Recovery into ±2% regulation band: <2 ms
+- Peak output deviation: < 10%
+- Recovery into ±2% regulation band: < 2 ms
 
 ### Input-voltage transient
 
 10 V → 14 V → 10 V
 
-The feedback controller should adjust the PWM duty cycle to return VOUT to 5 V.
+The feedback controller should adjust the PWM duty cycle to return V<sub>OUT</sub> to 5 V.
 
 ### Startup
 
-Initial condition:
-
-VOUT(0) = 0 V
+Initial condition: V<sub>OUT</sub>(0) = 0 V
 
 Targets:
 
-- Settling time: <5 ms
-- Maximum startup overshoot: <5.5 V
+- Settling time: < 5 ms
+- Maximum startup overshoot: < 5.5 V
 
 ---
 
@@ -117,138 +117,369 @@ MOSFET
 
 ---
 
-## 5. Initial Design Calculations
+## 5. Power Stage Design
 
-### Ideal Duty Cycle
+### 5.1 Design Assumptions
 
-For an ideal buck converter:
+| Parameter | Symbol | Value |
+|---|---|---:|
+| Input voltage range | $V_{IN}$ | 10–14 V |
+| Output voltage | $V_{OUT}$ | 5.0 V |
+| Output current range | $I_{OUT}$ | 0.1–0.5 A |
+| Switching frequency | $f_{SW}$ | 100 kHz |
+| Switching period | $T_{SW}$ | 10 µs |
+| Schottky diode forward drop (assumed) | $V_D$ | 0.5 V |
+| Inductor ripple target | $\Delta I_L$ | 0.15 A<sub>pp</sub> (30% of 0.5 A) |
+| Output ripple target | $\Delta V_{OUT}$ | < 50 mV<sub>pp</sub> |
 
-D = VOUT / VIN
+The MOSFET conduction drop is neglected in the duty-cycle calculation. At 0.5 A with an on-resistance of about 15 mΩ, it is roughly 7 mV.
 
-At the nominal operating point:
+### 5.2 Duty Cycle
 
-D = 5 V / 12 V
+Ideal buck converter:
 
-D = 0.417
+$$
+D_{ideal} = \frac{V_{OUT}}{V_{IN}}
+$$
 
-Therefore, the ideal nominal duty cycle is approximately:
+Including the diode forward drop. During the off-time, the switching node is clamped to $-V_D$, and volt-second balance on the inductor gives:
 
-**D = 41.7%**
+$$
+D = \frac{V_{OUT} + V_D}{V_{IN} + V_D}
+$$
 
-The practical duty cycle will be slightly different because of diode and switching losses.
+| $V_{IN}$ | $D_{ideal}$ | $D$ with diode drop |
+|---:|---:|---:|
+| 10 V | 50.0% | 52.4% |
+| 12 V | 41.7% | 44.0% |
+| 14 V | 35.7% | 37.9% |
 
----
+The controller must cover a duty-cycle range of about **38–52%**, plus margin for transients.
 
-### Load Resistance
+### 5.3 Load Resistance
 
-At maximum output current:
+$$
+R_{LOAD} = \frac{V_{OUT}}{I_{OUT}}
+$$
 
-RLOAD = VOUT / IOUT
+| Load condition | $I_{OUT}$ | $R_{LOAD}$ | $P_{OUT}$ |
+|---|---:|---:|---:|
+| Full load | 0.5 A | 10 Ω | 2.5 W |
+| Half load | 0.25 A | 20 Ω | 1.25 W |
+| Light load | 0.1 A | 50 Ω | 0.5 W |
 
-RLOAD = 5 V / 0.5 A
+### 5.4 Inductor Ripple Requirement
 
-**RLOAD = 10 Ω**
+$$
+\Delta I_L = 0.30 \times I_{OUT,max} = 0.30 \times 0.5\ \text{A} = 0.15\ \text{A}_{pp}
+$$
 
-At the minimum design load of 0.1 A:
+Ripple is largest at the **maximum input voltage**, so the inductor is sized at $V_{IN} = 14$ V.
 
-RLOAD = 5 V / 0.1 A
+### 5.5 Inductor Selection
 
-**RLOAD = 50 Ω**
+During the off-time, the voltage across the inductor is $-(V_{OUT} + V_D)$. Therefore:
 
----
+$$
+\Delta I_L = \frac{(V_{OUT} + V_D)(1 - D)}{L \, f_{SW}}
+$$
 
-### Inductor Ripple Target
+Solving for $L$:
 
-Target inductor-current ripple:
+$$
+L = \frac{(V_{OUT} + V_D)(1 - D)}{\Delta I_L \, f_{SW}}
+$$
 
-ΔIL = 30% × IOUT,max
+At $V_{IN} = 14$ V and $D = 0.379$:
 
-ΔIL = 0.30 × 0.5 A
+$$
+L = \frac{5.5 \times 0.621}{0.15 \times 100\,000} = 228\ \mu\text{H}
+$$
 
-**ΔIL = 0.15 App**
+With the ideal equation, which ignores $V_D$, the result is $L = 214\ \mu\text{H}$.
 
-The inductor value will be calculated from this requirement.
+**Selected value: $L = 220\ \mu\text{H}$** (nearest standard value).
 
----
+#### Resulting ripple with 220 µH
 
-### Output Capacitor
+| $V_{IN}$ | $D$ | $\Delta I_L$ | Ripple ratio | $I_{L,min}$ (0.5 A) | $I_{L,peak}$ (0.5 A) |
+|---:|---:|---:|---:|---:|---:|
+| 10 V | 52.4% | 119 mA<sub>pp</sub> | 24% | 0.441 A | 0.560 A |
+| 12 V | 44.0% | 140 mA<sub>pp</sub> | 28% | 0.430 A | 0.570 A |
+| 14 V | 37.9% | 155 mA<sub>pp</sub> | 31% | 0.422 A | 0.578 A |
 
-The output capacitor will be selected to achieve:
+At 14 V, the ripple is slightly above the 30% target. This is acceptable for a "~30%" requirement.
 
-**ΔVOUT < 50 mVpp**
+#### Continuous-conduction check
 
-The effect of capacitance and ESR will be evaluated in simulation.
+The converter stays in continuous conduction mode (CCM) when:
 
-### Inductor Selection
+$$
+I_{OUT,min} > \frac{\Delta I_L}{2}
+$$
 
-For a buck converter operating in continuous conduction mode:
+$$
+0.1\ \text{A} > \frac{0.155\ \text{A}}{2} = 0.078\ \text{A} \quad \checkmark
+$$
 
-\[
-\Delta I_L =
-\frac{V_{OUT}(1-V_{OUT}/V_{IN})}
-{L f_{SW}}
-\]
+The critical inductance at the worst case ($V_{IN} = 14$ V, $I_{OUT} = 0.1$ A) is:
 
-The highest inductor-current ripple occurs at the maximum input voltage.
+$$
+L_{crit} = \frac{(V_{OUT}+V_D)(1-D)}{2\, I_{OUT,min}\, f_{SW}} = 171\ \mu\text{H}
+$$
 
-Using:
+Because $220\ \mu\text{H} > 171\ \mu\text{H}$, the converter operates in **CCM across the full input and load range**.
 
-- \(V_{IN,max}=14\text{ V}\)
-- \(V_{OUT}=5\text{ V}\)
-- \(f_{SW}=100\text{ kHz}\)
-- \(\Delta I_L=0.15\text{ A}_{pp}\)
+#### Inductor current ratings
 
-\[
-L =
-\frac{5(1-5/14)}
-{0.15 \times 100\,000}
-\]
+$$
+I_{L,peak} = I_{OUT,max} + \frac{\Delta I_L}{2} = 0.5 + 0.078 = 0.578\ \text{A}
+$$
 
-\[
-L=214\ \mu H
-\]
+$$
+I_{L,RMS} = \sqrt{I_{OUT}^2 + \frac{\Delta I_L^2}{12}} \approx 0.502\ \text{A}
+$$
 
-The selected standard value is:
+| Inductor parameter | Requirement |
+|---|---:|
+| Inductance | 220 µH |
+| Saturation current | ≥ 1 A (margin for startup and transients) |
+| RMS current rating | ≥ 0.75 A |
+| DCR | ≤ 0.3 Ω |
 
-\[
-\boxed{L=220\ \mu H}
-\]
+DCR loss at full load:
 
-At the nominal 12 V input, the expected current ripple is approximately:
+$$
+P_{DCR} = I_{L,RMS}^2 \times DCR = 0.252 \times 0.3 = 76\ \text{mW}
+$$
 
-\[
-\Delta I_L =
-\frac{5(1-5/12)}
-{220\ \mu H \times 100\text{ kHz}}
-\]
+### 5.6 Output Capacitor Selection
 
-\[
-\Delta I_L \approx 133\text{ mA}_{pp}
-\]
+#### Ripple requirement
 
-At a 0.5 A load, the expected inductor-current limits are approximately:
+The ripple caused by capacitance alone is:
 
-\[
-I_{L,min}=0.434\text{ A}
-\]
+$$
+\Delta V_C = \frac{\Delta I_L}{8\, f_{SW}\, C_{OUT}}
+$$
 
-\[
-I_{L,max}=0.566\text{ A}
-\]
+$$
+C_{OUT,min} = \frac{0.155}{8 \times 100\,000 \times 0.05} = 3.9\ \mu\text{F}
+$$
+
+The maximum allowable ESR is:
+
+$$
+ESR_{max} = \frac{\Delta V_{OUT}}{\Delta I_L} = \frac{50\ \text{mV}}{0.155\ \text{A}} = 0.32\ \Omega
+$$
+
+#### Transient requirement
+
+The ripple requirement alone gives a very small capacitor. Load-transient performance drives the real choice.
+
+**Load release (0.5 A → 0.1 A).** The energy stored in the inductor is transferred to the capacitor:
+
+$$
+\Delta V_{overshoot} \approx \sqrt{V_{OUT}^2 + \frac{L\,(I_1^2 - I_2^2)}{C_{OUT}}} - V_{OUT}
+$$
+
+With $C_{OUT} = 100\ \mu\text{F}$:
+
+$$
+\Delta V_{overshoot} \approx \sqrt{25 + \frac{220\mu \times 0.24}{100\mu}} - 5 = 53\ \text{mV} \quad (1.1\%)
+$$
+
+**Loop-bandwidth estimate.** For a loop crossover near $f_c \approx f_{SW}/10 = 10$ kHz and a 0.4 A load step, keeping the deviation within 2% (100 mV) requires:
+
+$$
+C_{OUT} \gtrsim \frac{\Delta I_{OUT}}{2\pi f_c \, \Delta V} = \frac{0.4}{2\pi \times 10^4 \times 0.1} = 64\ \mu\text{F}
+$$
+
+**Selected value: $C_{OUT} = 100\ \mu\text{F}$, 16 V, low-ESR (≈ 30 mΩ)**
+
+#### Expected output ripple
+
+$$
+\Delta V_C = \frac{0.155}{8 \times 10^5 \times 100\mu} = 1.9\ \text{mV}
+$$
+
+$$
+\Delta V_{ESR} = 0.155 \times 0.03 = 4.7\ \text{mV}
+$$
+
+$$
+\Delta V_{OUT} \lesssim 6.6\ \text{mV}_{pp} \ll 50\ \text{mV}_{pp} \quad \checkmark
+$$
+
+#### Capacitor RMS current
+
+$$
+I_{C,RMS} = \frac{\Delta I_L}{\sqrt{12}} = 45\ \text{mA}
+$$
+
+| Output capacitor parameter | Requirement |
+|---|---:|
+| Capacitance | 100 µF |
+| Voltage rating | 16 V (≥ 2× $V_{OUT}$) |
+| ESR | ≤ 50 mΩ |
+| Ripple-current rating | ≥ 100 mA |
+
+> Note: if MLCCs are used, the effective capacitance drops under DC bias, so a higher voltage rating or more capacitance is needed.
+
+### 5.7 Input Capacitor Selection
+
+The input capacitor supplies the pulsed MOSFET current. Its RMS current is highest near $D = 0.5$:
+
+$$
+I_{CIN,RMS} = I_{OUT}\sqrt{D(1-D)} = 0.5\sqrt{0.524 \times 0.476} = 0.25\ \text{A}
+$$
+
+Input voltage ripple:
+
+$$
+\Delta V_{IN} \approx \frac{I_{OUT}\, D(1-D)}{f_{SW}\, C_{IN}}
+$$
+
+With $C_{IN} = 10\ \mu\text{F}$:
+
+$$
+\Delta V_{IN} \approx \frac{0.5 \times 0.249}{10^5 \times 10\mu} = 125\ \text{mV}_{pp} \ (\approx 1\%)
+$$
+
+**Selected value: $C_{IN} = 10\ \mu\text{F}$, 25 V ceramic**, placed close to the MOSFET and diode.
+
+### 5.8 Diode Selection
+
+A Schottky diode is used because of its low forward voltage and negligible reverse-recovery charge.
+
+#### Voltage stress
+
+$$
+V_{R,max} = V_{IN,max} = 14\ \text{V}
+$$
+
+With margin for switching-node ringing, the diode should be rated for **≥ 30 V**.
+
+#### Current stress
+
+The diode conducts during the off-time:
+
+$$
+I_{D,avg} = I_{OUT}(1 - D)
+$$
+
+| $V_{IN}$ | $I_{D,avg}$ | $I_{D,peak}$ | Conduction loss $V_D \cdot I_{D,avg}$ |
+|---:|---:|---:|---:|
+| 10 V | 0.24 A | 0.56 A | 119 mW |
+| 12 V | 0.28 A | 0.57 A | 140 mW |
+| 14 V | 0.31 A | 0.58 A | 155 mW |
+
+**Selected diode: MBRS340** (40 V, 3 A Schottky, available in the LTspice default library)
+
+| Parameter | Requirement | MBRS340 |
+|---|---:|---:|
+| Reverse voltage | ≥ 30 V | 40 V |
+| Average forward current | ≥ 1 A | 3 A |
+
+> The diode is the dominant loss in this converter, at about 5.6% of output power at 12 V. A synchronous rectifier would remove most of this loss and is a possible future improvement.
+
+### 5.9 MOSFET Selection
+
+#### Voltage stress
+
+$$
+V_{DS,max} = V_{IN,max} + V_D \approx 14.5\ \text{V}
+$$
+
+With margin for ringing, the MOSFET should be rated for **≥ 30 V**.
+
+#### Current stress
+
+$$
+I_{Q,RMS} \approx I_{OUT}\sqrt{D}
+$$
+
+Worst case is $V_{IN} = 10$ V:
+
+$$
+I_{Q,RMS} = 0.5\sqrt{0.524} = 0.36\ \text{A}
+$$
+
+**Selected MOSFET: Si4410DY** (30 V N-channel, available in the LTspice default library)
+
+#### Loss estimate at 12 V, 0.5 A
+
+Conduction loss, assuming $R_{DS(on)} \approx 15\ \text{m}\Omega$ at $V_{GS} = 10$ V:
+
+$$
+P_{cond} = I_{Q,RMS}^2 \, R_{DS(on)} = 0.11 \times 0.015 \approx 2\ \text{mW}
+$$
+
+Switching loss, assuming $t_r + t_f \approx 40$ ns:
+
+$$
+P_{sw} \approx \frac{1}{2} V_{IN}\, I_{OUT}\,(t_r + t_f)\, f_{SW} = 0.5 \times 12 \times 0.5 \times 40\text{n} \times 100\text{k} = 12\ \text{mW}
+$$
+
+Gate-drive power is supplied by the driver:
+
+$$
+P_{gate} = Q_g \, V_{GS} \, f_{SW}
+$$
+
+> The assumed $R_{DS(on)}$, rise/fall times, and $Q_g$ must be checked against the datasheet and verified in simulation in Phase 8.
+
+#### Gate-drive consideration
+
+This is a **high-side N-channel MOSFET**. Its source is connected to the switching node, so the gate must be driven about 10 V **above** the switching node, which means up to about 24 V above ground.
+
+- **Simulation:** drive the gate with a pulse source connected between the gate and the switching node (floating drive).
+- **Real hardware:** a bootstrap gate driver is required. A P-channel MOSFET is an alternative that avoids the bootstrap circuit, at the cost of higher $R_{DS(on)}$.
+
+### 5.10 Estimated Loss Budget (12 V, 0.5 A)
+
+| Loss contributor | Estimate |
+|---|---:|
+| Diode conduction | 140 mW |
+| Inductor DCR | 76 mW |
+| MOSFET switching | 12 mW |
+| MOSFET conduction | 2 mW |
+| Output capacitor ESR | < 1 mW |
+| **Total** | **≈ 230 mW** |
+
+$$
+\eta \approx \frac{P_{OUT}}{P_{OUT} + P_{loss}} = \frac{2.5}{2.73} \approx 91.6\%
+$$
+
+This estimate excludes controller and gate-drive power. It meets the **η > 85%** target with margin.
+
+### 5.11 Power Stage Summary
+
+| Component | Selected value / part | Key rating |
+|---|---|---|
+| Inductor | 220 µH | I<sub>sat</sub> ≥ 1 A, DCR ≤ 0.3 Ω |
+| Output capacitor | 100 µF | 16 V, ESR ≈ 30 mΩ |
+| Input capacitor | 10 µF ceramic | 25 V |
+| Diode | MBRS340 Schottky | 40 V, 3 A |
+| MOSFET | Si4410DY N-channel | 30 V |
+| Full-load resistance | 10 Ω | 2.5 W |
+| Nominal duty cycle | 44% | at 12 V |
+
+#### Calculated values to verify in Phase 3
+
+| Quantity (12 V, 0.5 A) | Calculated |
+|---|---:|
+| Duty cycle | 44.0% |
+| Inductor ripple | 140 mA<sub>pp</sub> |
+| $I_{L,min}$ / $I_{L,peak}$ | 0.430 A / 0.570 A |
+| Output ripple | < 7 mV<sub>pp</sub> |
+| Switching-node low level | ≈ −0.5 V |
 
 ---
 
 ## 6. Feedback Network
 
-The controller uses a 1.0 V reference.
-
-The feedback divider must therefore generate:
-
-VFB = 1.0 V
-
-when:
-
-VOUT = 5.0 V
+The controller uses a 1.0 V reference. The feedback divider must therefore generate $V_{FB} = 1.0$ V when $V_{OUT} = 5.0$ V.
 
 Initial divider:
 
@@ -266,13 +497,15 @@ Initial divider:
 
 The divider equation is:
 
-VFB = VOUT × RBOTTOM / (RTOP + RBOTTOM)
+$$
+V_{FB} = V_{OUT} \times \frac{R_{BOTTOM}}{R_{TOP} + R_{BOTTOM}}
+$$
 
 Therefore:
 
-VFB = 5 × 10k / (40k + 10k)
-
-**VFB = 1.0 V**
+$$
+V_{FB} = 5 \times \frac{10\text{k}}{40\text{k} + 10\text{k}} = 1.0\ \text{V}
+$$
 
 ---
 
@@ -291,10 +524,13 @@ The project is being developed incrementally.
 - [x] Calculate nominal duty cycle
 - [x] Calculate load resistance
 - [x] Define inductor ripple requirement
-- [ ] Calculate inductor value
-- [ ] Calculate output capacitor
-- [ ] Select diode
-- [ ] Select MOSFET
+- [x] Calculate inductor value
+- [x] Verify continuous conduction mode
+- [x] Calculate output capacitor
+- [x] Calculate input capacitor
+- [x] Select diode
+- [x] Select MOSFET
+- [x] Estimate loss budget
 
 ### Phase 3: Open-Loop Simulation
 - [ ] Build open-loop buck in LTspice
@@ -394,19 +630,19 @@ Planned plots:
 
 ## 10. Efficiency Target
 
-After nonideal component models are introduced, the initial full-load efficiency target is:
+After nonideal component models are introduced, the initial full-load efficiency target is **η > 85%** at:
 
-**η > 85%**
+- V<sub>IN</sub> = 12 V
+- V<sub>OUT</sub> = 5 V
+- I<sub>OUT</sub> = 0.5 A
 
-at:
-
-- VIN = 12 V
-- VOUT = 5 V
-- IOUT = 0.5 A
+The Phase 2 loss budget estimates **≈ 91.6%** (see Section 5.10).
 
 Efficiency will be calculated using:
 
-η = POUT / PIN × 100%
+$$
+\eta = \frac{P_{OUT}}{P_{IN}} \times 100\%
+$$
 
 An efficiency versus load-current curve will be generated.
 
@@ -451,15 +687,14 @@ closed-loop-buck-converter/
 
 ## 13. Project Status
 
-**Current stage: Power-stage design**
+**Current stage: Open-loop simulation (Phase 3)**
 
 Next steps:
 
-1. Calculate the required inductance from the 150 mApp ripple specification
-2. Calculate the output capacitance from the 50 mVpp ripple specification
-3. Select appropriate MOSFET and diode ratings
-4. Build the open-loop LTspice model
-5. Compare calculated and simulated results
+1. Build the open-loop LTspice model with an ideal switch and the MBRS340 diode (L = 220 µH, C<sub>OUT</sub> = 100 µF, R<sub>LOAD</sub> = 10 Ω, D = 0.44)
+2. Verify the switching-node voltage, inductor current, and output voltage
+3. Compare simulated ripple and inductor-current limits with the Section 5.11 values
+4. Sweep input voltage (10/12/14 V) and load (10/20/50 Ω)
 
 ---
 
