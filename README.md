@@ -179,6 +179,63 @@ The output capacitor will be selected to achieve:
 
 The effect of capacitance and ESR will be evaluated in simulation.
 
+### Inductor Selection
+
+For a buck converter operating in continuous conduction mode:
+
+\[
+\Delta I_L =
+\frac{V_{OUT}(1-V_{OUT}/V_{IN})}
+{L f_{SW}}
+\]
+
+The highest inductor-current ripple occurs at the maximum input voltage.
+
+Using:
+
+- \(V_{IN,max}=14\text{ V}\)
+- \(V_{OUT}=5\text{ V}\)
+- \(f_{SW}=100\text{ kHz}\)
+- \(\Delta I_L=0.15\text{ A}_{pp}\)
+
+\[
+L =
+\frac{5(1-5/14)}
+{0.15 \times 100\,000}
+\]
+
+\[
+L=214\ \mu H
+\]
+
+The selected standard value is:
+
+\[
+\boxed{L=220\ \mu H}
+\]
+
+At the nominal 12 V input, the expected current ripple is approximately:
+
+\[
+\Delta I_L =
+\frac{5(1-5/12)}
+{220\ \mu H \times 100\text{ kHz}}
+\]
+
+\[
+\Delta I_L \approx 133\text{ mA}_{pp}
+\]
+
+At a 0.5 A load, the expected inductor-current limits are approximately:
+
+\[
+I_{L,min}=0.434\text{ A}
+\]
+
+\[
+I_{L,max}=0.566\text{ A}
+\]
+
 ---
 
 ## 6. Feedback Network
