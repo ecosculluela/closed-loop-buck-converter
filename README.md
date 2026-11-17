@@ -401,6 +401,27 @@ The power stage was first verified with a fixed 100 kHz, 44% duty-cycle gate sig
 
 ### 9.2 Bang-Bang Controller: Effect of Ripple Injection (12 V, 10 Ω)
 
+The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was simulated with and without the ripple-injection network using `.step param INJ list 0 1`.
+
+| Quantity | Without injection | With injection |
+|---|---:|---:|
+| V<sub>OUT</sub> range | 4.945–5.160 V | 4.965–4.972 V |
+| Average V<sub>OUT</sub> | ≈ 5.05 V | ≈ 4.97 V |
+| Output ripple | ≈ 215 mV<sub>pp</sub> | ≈ 5 mV<sub>pp</sub> |
+| Switching frequency | ≈ 8.7 kHz | ≈ 105 kHz |
+| I<sub>L,min</sub> / I<sub>L,peak</sub> | 0 / 1.28 A | 0.45 / 0.555 A |
+| Inductor ripple | 1.28 A<sub>pp</sub> | ≈ 105 mA<sub>pp</sub> |
+| Startup V<sub>OUT</sub> peak | _x V_ | _x V_ |
+| Startup I<sub>L</sub> peak | _x A_ | _x A_ |
+| Operating mode | DCM | CCM |
+
+**Observations:**
+
+- **Without injection:** The output overshoots both thresholds, with a ripple of ~215 mV<sub>pp</sub>, more than twice the 100 mV window. The low-ESR output capacitor delays the feedback, so the inductor keeps charging it after the switch turns off. The converter switches at only ~8.7 kHz, and the inductor current swings from 0 to 1.28 A, entering DCM for ~25 µs every cycle and exceeding the 1 A saturation rating.
+- **With injection:** The injected triangle at FB makes the comparator switch on a fast, in-phase signal. The converter runs at ~105 kHz in CCM with an inductor current of 0.45–0.555 A, close to the open-loop design (Section 9.1).
+- **Ripple:** The output ripple drops to ~5 mV<sub>pp</sub>, well below the 100 mV hysteresis window. Switching is now set by the injected ripple at FB rather than by V<sub>OUT</sub>, so the output only shows the small ESR ripple.
+- **DC offset:** The average output settles at ~4.97 V (−0.6%), within the 4.95–5.05 V band. The small offset comes from the injected ripple and can be trimmed with R<sub>TOP</sub>.
+
 ![Bang-bang schematic](Results/Simulations/02_Schematic.png)
 
 ![Bang-bang schematic](Results/Simulations/02_Startup.png)
