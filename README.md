@@ -1,19 +1,23 @@
-# Closed-Loop Buck Converter
+# Bang-Bang Controlled Buck Converter
 
-Design and LTspice simulation of a closed-loop nonsynchronous buck converter using voltage-mode PWM control.
+Design and LTspice simulation of a closed-loop nonsynchronous buck converter using **bang-bang (hysteretic) voltage control**.
 
-This project was created to put into practice and further develop the power electronics knowledge I have gained throughout my professional career. Starting from first principles, I will design and verify the open-loop power stage, implement voltage feedback and compensation, and evaluate the converter's closed-loop behavior under steady-state and transient conditions.
+This project was created to put into practice and further develop the power electronics knowledge I have gained throughout my professional career. Starting from first principles, I will design and verify the buck converter power stage, implement a hysteretic feedback controller, and evaluate the converter under steady-state, startup, load-transient, and input-voltage-transient conditions.
+
+The main objective is to demonstrate how a simple nonlinear controller can regulate the output voltage **without an error amplifier, compensation network, PWM ramp, or fixed-frequency PWM modulator**.
 
 ---
 
 ## 1. Project Objectives
 
 - Design a DC-DC buck converter from first principles
-- Calculate the required duty cycle, inductor, and output capacitor
-- Simulate the converter power stage in LTspice
+- Calculate the required inductor and capacitors
+- Simulate the power stage in LTspice
 - Understand MOSFET, diode, inductor, and capacitor behavior
-- Implement voltage feedback
-- Implement a closed-loop voltage-mode controller
+- Implement output-voltage feedback
+- Implement a bang-bang / hysteretic controller
+- Define upper and lower switching thresholds
+- Observe the resulting variable switching frequency
 - Evaluate startup behavior
 - Evaluate load and input-voltage transients
 - Analyze component losses and converter efficiency
@@ -27,58 +31,63 @@ This project was created to put into practice and further develop the power elec
 |---|---:|
 | Input voltage range | 10–14 V |
 | Nominal input voltage | 12 V |
-| Output voltage | 5.0 V |
-| Output regulation | ±2% |
+| Nominal output voltage | 5.0 V |
 | Output current | 0.1–0.5 A |
 | Maximum output power | 2.5 W |
-| Switching frequency | 100 kHz |
-| Output ripple target | < 50 mV<sub>pp</sub> |
-| Inductor ripple target | ~30% of full-load current |
+| Control method | Bang-bang / hysteretic |
+| Lower switching threshold | 4.95 V |
+| Upper switching threshold | 5.05 V |
+| Hysteresis window | 100 mV |
+| Nominal output ripple target | ≈ 100 mV |
 | Topology | Nonsynchronous buck |
-| Control method | Voltage-mode PWM |
-| Feedback reference | 1.0 V |
+| Target efficiency | > 85% |
 
-The regulated output-voltage target is therefore:
+The controller regulates the output inside the hysteresis window:
 
 $$
-4.90\ \text{V} \le V_{OUT} \le 5.10\ \text{V}
+4.95\ \text{V} \le V_{OUT} \le 5.05\ \text{V}
 $$
+
+Unlike a conventional fixed-frequency PWM controller, **switching frequency is not specified as a control requirement**. It is an outcome of the power stage, load, input voltage, and hysteresis window.
 
 ---
 
-## 3. Transient Requirements
+## 3. Control Principle
 
-The converter will also be evaluated under changing operating conditions.
+The controller uses two output-voltage thresholds:
 
-### Load transient
+$$
+V_{LOW} = 4.95\ \text{V}
+$$
 
-0.1 A → 0.5 A → 0.1 A
+$$
+V_{HIGH} = 5.05\ \text{V}
+$$
 
-Initial target:
+The basic switching law is:
 
-- Peak output deviation: < 10%
-- Recovery into ±2% regulation band: < 2 ms
+```text
+if VOUT < 4.95 V:
+    MOSFET = ON
 
-### Input-voltage transient
+if VOUT > 5.05 V:
+    MOSFET = OFF
 
-10 V → 14 V → 10 V
+otherwise:
+    keep previous MOSFET state
+```
 
-The feedback controller should adjust the PWM duty cycle to return V<sub>OUT</sub> to 5 V.
+The difference between the two thresholds creates hysteresis:
 
-### Startup
+$$
+V_{HYS} = V_{HIGH} - V_{LOW} = 5.05 - 4.95 = 100\ \text{mV}
+$$
 
-Initial condition: V<sub>OUT</sub>(0) = 0 V
-
-Targets:
-
-- Settling time: < 5 ms
-- Maximum startup overshoot: < 5.5 V
+The output therefore oscillates around approximately 5 V.
 
 ---
 
 ## 4. Converter Architecture
-
-The final converter architecture will consist of:
 
 ```text
                       POWER STAGE
@@ -94,581 +103,333 @@ VIN ── MOSFET ── SW ── Inductor ───── VOUT
 
                      CONTROL LOOP
 
-VOUT
-  │
-  ▼
-Feedback Divider
-  │
-  ▼
-Error Amplifier ◄──── VREF
-  │
-  ▼
-Compensator
-  │
-  ▼
-PWM Comparator ◄──── Ramp
-  │
-  ▼
-Gate Driver
-  │
-  ▼
-MOSFET
+                         VOUT
+                           │
+                           ▼
+                 Hysteretic Comparator
+                    │             │
+                 4.95 V         5.05 V
+                    │             │
+                    └──────┬──────┘
+                           │
+                           ▼
+                     Gate Driver
+                           │
+                           ▼
+                        MOSFET
 ```
+
+This is considerably simpler than the voltage-mode PWM architecture:
+
+```text
+Voltage-mode PWM:
+
+VOUT → Divider → Error Amp → Compensation → PWM Comparator → Driver
+
+
+Bang-bang:
+
+VOUT → Hysteretic Comparator → Driver
+```
+
+The simplicity of the control loop is one of the main reasons for selecting this control method for the project.
 
 ---
 
-## 5. Power Stage Design
+## 5. Power Stage
 
-### 5.1 Design Assumptions
+The initial power stage uses the following components:
 
-| Parameter | Symbol | Value |
-|---|---|---:|
-| Input voltage range | $V_{IN}$ | 10–14 V |
-| Output voltage | $V_{OUT}$ | 5.0 V |
-| Output current range | $I_{OUT}$ | 0.1–0.5 A |
-| Switching frequency | $f_{SW}$ | 100 kHz |
-| Switching period | $T_{SW}$ | 10 µs |
-| Schottky diode forward drop (assumed) | $V_D$ | 0.5 V |
-| Inductor ripple target | $\Delta I_L$ | 0.15 A<sub>pp</sub> (30% of 0.5 A) |
-| Output ripple target | $\Delta V_{OUT}$ | < 50 mV<sub>pp</sub> |
+| Component | Selected value / part |
+|---|---|
+| Input voltage | 10–14 V |
+| Nominal input | 12 V |
+| Output voltage | ≈ 5 V |
+| Output current | 0.1–0.5 A |
+| Inductor | 220 µH |
+| Output capacitor | 100 µF |
+| Input capacitor | 10 µF |
+| Diode | MBRS340 |
+| MOSFET | Si4410DY |
+| Full-load resistance | 10 Ω |
 
-The MOSFET conduction drop is neglected in the duty-cycle calculation. At 0.5 A with an on-resistance of about 15 mΩ, it is roughly 7 mV.
+These values are a starting point inherited from the initial open-loop buck design.
 
-### 5.2 Duty Cycle
+Because the bang-bang controller does not enforce a fixed switching frequency, the final values of **L, C, and hysteresis** will be evaluated together through simulation.
 
-Ideal buck converter:
-
-$$
-D_{ideal} = \frac{V_{OUT}}{V_{IN}}
-$$
-
-Including the diode forward drop. During the off-time, the switching node is clamped to $-V_D$, and volt-second balance on the inductor gives:
-
-$$
-D = \frac{V_{OUT} + V_D}{V_{IN} + V_D}
-$$
-
-| $V_{IN}$ | $D_{ideal}$ | $D$ with diode drop |
-|---:|---:|---:|
-| 10 V | 50.0% | 52.4% |
-| 12 V | 41.7% | 44.0% |
-| 14 V | 35.7% | 37.9% |
-
-The controller must cover a duty-cycle range of about **38–52%**, plus margin for transients.
-
-### 5.3 Load Resistance
+### 5.1 Load Resistance
 
 $$
 R_{LOAD} = \frac{V_{OUT}}{I_{OUT}}
 $$
 
-| Load condition | $I_{OUT}$ | $R_{LOAD}$ | $P_{OUT}$ |
+| Load condition | Current | Resistance | Output power |
 |---|---:|---:|---:|
 | Full load | 0.5 A | 10 Ω | 2.5 W |
 | Half load | 0.25 A | 20 Ω | 1.25 W |
 | Light load | 0.1 A | 50 Ω | 0.5 W |
 
-### 5.4 Inductor Ripple Requirement
+---
 
-$$
-\Delta I_L = 0.30 \times I_{OUT,max} = 0.30 \times 0.5\ \text{A} = 0.15\ \text{A}_{pp}
-$$
+## 6. Bang-Bang Controller
 
-Ripple is largest at the **maximum input voltage**, so the inductor is sized at $V_{IN} = 14$ V.
+The controller determines the MOSFET state directly from the output voltage.
 
-### 5.5 Inductor Selection
+### MOSFET ON
 
-During the off-time, the voltage across the inductor is $-(V_{OUT} + V_D)$. Therefore:
+When $V_{OUT} < V_{LOW}$, the MOSFET turns ON. Inductor current increases and energy is transferred from the input supply to the load and output capacitor.
 
-$$
-\Delta I_L = \frac{(V_{OUT} + V_D)(1 - D)}{L \, f_{SW}}
-$$
+### MOSFET OFF
 
-Solving for $L$:
+When $V_{OUT} > V_{HIGH}$, the MOSFET turns OFF. The inductor current freewheels through the Schottky diode and begins decreasing.
 
-$$
-L = \frac{(V_{OUT} + V_D)(1 - D)}{\Delta I_L \, f_{SW}}
-$$
+### Hysteresis region
 
-At $V_{IN} = 14$ V and $D = 0.379$:
-
-$$
-L = \frac{5.5 \times 0.621}{0.15 \times 100\,000} = 228\ \mu\text{H}
-$$
-
-With the ideal equation, which ignores $V_D$, the result is $L = 214\ \mu\text{H}$.
-
-**Selected value: $L = 220\ \mu\text{H}$** (nearest standard value).
-
-#### Resulting ripple with 220 µH
-
-| $V_{IN}$ | $D$ | $\Delta I_L$ | Ripple ratio | $I_{L,min}$ (0.5 A) | $I_{L,peak}$ (0.5 A) |
-|---:|---:|---:|---:|---:|---:|
-| 10 V | 52.4% | 119 mA<sub>pp</sub> | 24% | 0.441 A | 0.560 A |
-| 12 V | 44.0% | 140 mA<sub>pp</sub> | 28% | 0.430 A | 0.570 A |
-| 14 V | 37.9% | 155 mA<sub>pp</sub> | 31% | 0.422 A | 0.578 A |
-
-At 14 V, the ripple is slightly above the 30% target. This is acceptable for a "~30%" requirement.
-
-#### Continuous-conduction check
-
-The converter stays in continuous conduction mode (CCM) when:
-
-$$
-I_{OUT,min} > \frac{\Delta I_L}{2}
-$$
-
-$$
-0.1\ \text{A} > \frac{0.155\ \text{A}}{2} = 0.078\ \text{A} \quad \checkmark
-$$
-
-The critical inductance at the worst case ($V_{IN} = 14$ V, $I_{OUT} = 0.1$ A) is:
-
-$$
-L_{crit} = \frac{(V_{OUT}+V_D)(1-D)}{2\, I_{OUT,min}\, f_{SW}} = 171\ \mu\text{H}
-$$
-
-Because $220\ \mu\text{H} > 171\ \mu\text{H}$, the converter operates in **CCM across the full input and load range**.
-
-#### Inductor current ratings
-
-$$
-I_{L,peak} = I_{OUT,max} + \frac{\Delta I_L}{2} = 0.5 + 0.078 = 0.578\ \text{A}
-$$
-
-$$
-I_{L,RMS} = \sqrt{I_{OUT}^2 + \frac{\Delta I_L^2}{12}} \approx 0.502\ \text{A}
-$$
-
-| Inductor parameter | Requirement |
-|---|---:|
-| Inductance | 220 µH |
-| Saturation current | ≥ 1 A (margin for startup and transients) |
-| RMS current rating | ≥ 0.75 A |
-| DCR | ≤ 0.3 Ω |
-
-DCR loss at full load:
-
-$$
-P_{DCR} = I_{L,RMS}^2 \times DCR = 0.252 \times 0.3 = 76\ \text{mW}
-$$
-
-### 5.6 Output Capacitor Selection
-
-#### Ripple requirement
-
-The ripple caused by capacitance alone is:
-
-$$
-\Delta V_C = \frac{\Delta I_L}{8\, f_{SW}\, C_{OUT}}
-$$
-
-$$
-C_{OUT,min} = \frac{0.155}{8 \times 100\,000 \times 0.05} = 3.9\ \mu\text{F}
-$$
-
-The maximum allowable ESR is:
-
-$$
-ESR_{max} = \frac{\Delta V_{OUT}}{\Delta I_L} = \frac{50\ \text{mV}}{0.155\ \text{A}} = 0.32\ \Omega
-$$
-
-#### Transient requirement
-
-The ripple requirement alone gives a very small capacitor. Load-transient performance drives the real choice.
-
-**Load release (0.5 A → 0.1 A).** The energy stored in the inductor is transferred to the capacitor:
-
-$$
-\Delta V_{overshoot} \approx \sqrt{V_{OUT}^2 + \frac{L\,(I_1^2 - I_2^2)}{C_{OUT}}} - V_{OUT}
-$$
-
-With $C_{OUT} = 100\ \mu\text{F}$:
-
-$$
-\Delta V_{overshoot} \approx \sqrt{25 + \frac{220\mu \times 0.24}{100\mu}} - 5 = 53\ \text{mV} \quad (1.1\%)
-$$
-
-**Loop-bandwidth estimate.** For a loop crossover near $f_c \approx f_{SW}/10 = 10$ kHz and a 0.4 A load step, keeping the deviation within 2% (100 mV) requires:
-
-$$
-C_{OUT} \gtrsim \frac{\Delta I_{OUT}}{2\pi f_c \, \Delta V} = \frac{0.4}{2\pi \times 10^4 \times 0.1} = 64\ \mu\text{F}
-$$
-
-**Selected value: $C_{OUT} = 100\ \mu\text{F}$, 16 V, low-ESR (≈ 30 mΩ)**
-
-#### Expected output ripple
-
-$$
-\Delta V_C = \frac{0.155}{8 \times 10^5 \times 100\mu} = 1.9\ \text{mV}
-$$
-
-$$
-\Delta V_{ESR} = 0.155 \times 0.03 = 4.7\ \text{mV}
-$$
-
-$$
-\Delta V_{OUT} \lesssim 6.6\ \text{mV}_{pp} \ll 50\ \text{mV}_{pp} \quad \checkmark
-$$
-
-#### Capacitor RMS current
-
-$$
-I_{C,RMS} = \frac{\Delta I_L}{\sqrt{12}} = 45\ \text{mA}
-$$
-
-| Output capacitor parameter | Requirement |
-|---|---:|
-| Capacitance | 100 µF |
-| Voltage rating | 16 V (≥ 2× $V_{OUT}$) |
-| ESR | ≤ 50 mΩ |
-| Ripple-current rating | ≥ 100 mA |
-
-> Note: if MLCCs are used, the effective capacitance drops under DC bias, so a higher voltage rating or more capacitance is needed.
-
-### 5.7 Input Capacitor Selection
-
-The input capacitor supplies the pulsed MOSFET current. Its RMS current is highest near $D = 0.5$:
-
-$$
-I_{CIN,RMS} = I_{OUT}\sqrt{D(1-D)} = 0.5\sqrt{0.524 \times 0.476} = 0.25\ \text{A}
-$$
-
-Input voltage ripple:
-
-$$
-\Delta V_{IN} \approx \frac{I_{OUT}\, D(1-D)}{f_{SW}\, C_{IN}}
-$$
-
-With $C_{IN} = 10\ \mu\text{F}$:
-
-$$
-\Delta V_{IN} \approx \frac{0.5 \times 0.249}{10^5 \times 10\mu} = 125\ \text{mV}_{pp} \ (\approx 1\%)
-$$
-
-**Selected value: $C_{IN} = 10\ \mu\text{F}$, 25 V ceramic**, placed close to the MOSFET and diode.
-
-### 5.8 Diode Selection
-
-A Schottky diode is used because of its low forward voltage and negligible reverse-recovery charge.
-
-#### Voltage stress
-
-$$
-V_{R,max} = V_{IN,max} = 14\ \text{V}
-$$
-
-With margin for switching-node ringing, the diode should be rated for **≥ 30 V**.
-
-#### Current stress
-
-The diode conducts during the off-time:
-
-$$
-I_{D,avg} = I_{OUT}(1 - D)
-$$
-
-| $V_{IN}$ | $I_{D,avg}$ | $I_{D,peak}$ | Conduction loss $V_D \cdot I_{D,avg}$ |
-|---:|---:|---:|---:|
-| 10 V | 0.24 A | 0.56 A | 119 mW |
-| 12 V | 0.28 A | 0.57 A | 140 mW |
-| 14 V | 0.31 A | 0.58 A | 155 mW |
-
-**Selected diode: MBRS340** (40 V, 3 A Schottky, available in the LTspice default library)
-
-| Parameter | Requirement | MBRS340 |
-|---|---:|---:|
-| Reverse voltage | ≥ 30 V | 40 V |
-| Average forward current | ≥ 1 A | 3 A |
-
-> The diode is the dominant loss in this converter, at about 5.6% of output power at 12 V. A synchronous rectifier would remove most of this loss and is a possible future improvement.
-
-### 5.9 MOSFET Selection
-
-#### Voltage stress
-
-$$
-V_{DS,max} = V_{IN,max} + V_D \approx 14.5\ \text{V}
-$$
-
-With margin for ringing, the MOSFET should be rated for **≥ 30 V**.
-
-#### Current stress
-
-$$
-I_{Q,RMS} \approx I_{OUT}\sqrt{D}
-$$
-
-Worst case is $V_{IN} = 10$ V:
-
-$$
-I_{Q,RMS} = 0.5\sqrt{0.524} = 0.36\ \text{A}
-$$
-
-**Selected MOSFET: Si4410DY** (30 V N-channel, available in the LTspice default library)
-
-#### Loss estimate at 12 V, 0.5 A
-
-Conduction loss, assuming $R_{DS(on)} \approx 15\ \text{m}\Omega$ at $V_{GS} = 10$ V:
-
-$$
-P_{cond} = I_{Q,RMS}^2 \, R_{DS(on)} = 0.11 \times 0.015 \approx 2\ \text{mW}
-$$
-
-Switching loss, assuming $t_r + t_f \approx 40$ ns:
-
-$$
-P_{sw} \approx \frac{1}{2} V_{IN}\, I_{OUT}\,(t_r + t_f)\, f_{SW} = 0.5 \times 12 \times 0.5 \times 40\text{n} \times 100\text{k} = 12\ \text{mW}
-$$
-
-Gate-drive power is supplied by the driver:
-
-$$
-P_{gate} = Q_g \, V_{GS} \, f_{SW}
-$$
-
-> The assumed $R_{DS(on)}$, rise/fall times, and $Q_g$ must be checked against the datasheet and verified in simulation in Phase 8.
-
-#### Gate-drive consideration
-
-This is a **high-side N-channel MOSFET**. Its source is connected to the switching node, so the gate must be driven about 10 V **above** the switching node, which means up to about 24 V above ground.
-
-- **Simulation:** drive the gate with a pulse source connected between the gate and the switching node (floating drive).
-- **Real hardware:** a bootstrap gate driver is required. A P-channel MOSFET is an alternative that avoids the bootstrap circuit, at the cost of higher $R_{DS(on)}$.
-
-### 5.10 Estimated Loss Budget (12 V, 0.5 A)
-
-| Loss contributor | Estimate |
-|---|---:|
-| Diode conduction | 140 mW |
-| Inductor DCR | 76 mW |
-| MOSFET switching | 12 mW |
-| MOSFET conduction | 2 mW |
-| Output capacitor ESR | < 1 mW |
-| **Total** | **≈ 230 mW** |
-
-$$
-\eta \approx \frac{P_{OUT}}{P_{OUT} + P_{loss}} = \frac{2.5}{2.73} \approx 91.6\%
-$$
-
-This estimate excludes controller and gate-drive power. It meets the **η > 85%** target with margin.
-
-### 5.11 Power Stage Summary
-
-| Component | Selected value / part | Key rating |
-|---|---|---|
-| Inductor | 220 µH | I<sub>sat</sub> ≥ 1 A, DCR ≤ 0.3 Ω |
-| Output capacitor | 100 µF | 16 V, ESR ≈ 30 mΩ |
-| Input capacitor | 10 µF ceramic | 25 V |
-| Diode | MBRS340 Schottky | 40 V, 3 A |
-| MOSFET | Si4410DY N-channel | 30 V |
-| Full-load resistance | 10 Ω | 2.5 W |
-| Nominal duty cycle | 44% | at 12 V |
-
-#### Calculated values to verify in Phase 3
-
-| Quantity (12 V, 0.5 A) | Calculated |
-|---|---:|
-| Duty cycle | 44.0% |
-| Inductor ripple | 140 mA<sub>pp</sub> |
-| $I_{L,min}$ / $I_{L,peak}$ | 0.430 A / 0.570 A |
-| Output ripple | < 7 mV<sub>pp</sub> |
-| Switching-node low level | ≈ −0.5 V |
+When $V_{LOW} < V_{OUT} < V_{HIGH}$, the comparator retains its previous state. This prevents rapid switching around a single reference voltage.
 
 ---
 
-## 6. Feedback Network
+## 7. Expected Waveforms
 
-The controller uses a 1.0 V reference. The feedback divider must therefore generate $V_{FB} = 1.0$ V when $V_{OUT} = 5.0$ V.
+The project will analyze four main signals.
 
-Initial divider:
+### Output voltage
 
 ```text
-5 V OUT
-   │
-  40 kΩ
-   │
-   ├──── VFB = 1 V
-   │
-  10 kΩ
-   │
-  GND
+5.05 V       /¯¯\      /¯¯\
+            /    \    /    \
+5.00 V ----/------\--/------\----
+          /        \/        \
+4.95 V
 ```
 
-The divider equation is:
+### MOSFET gate
 
-$$
-V_{FB} = V_{OUT} \times \frac{R_{BOTTOM}}{R_{TOP} + R_{BOTTOM}}
-$$
+```text
+ON     ┌──────┐        ┌──────┐
+       │      │        │      │
+OFF ───┘      └────────┘      └──
+```
 
-Therefore:
+### Switching node
 
-$$
-V_{FB} = 5 \times \frac{10\text{k}}{40\text{k} + 10\text{k}} = 1.0\ \text{V}
-$$
+```text
+VIN     ┌──────┐        ┌──────┐
+        │      │        │      │
+0 V  ───┘      └────────┘      └──
+```
+
+During diode conduction, the switching node falls slightly below ground by approximately the diode forward voltage.
+
+### Inductor current
+
+```text
+        /\        /\        /\
+       /  \      /  \      /  \
+      /    \    /    \    /    \
+─────/      \──/      \──/      \──
+```
+
+The key behavior to observe is:
+
+**VOUT falls → MOSFET ON → IL rises → VOUT rises → MOSFET OFF → IL falls → VOUT falls → repeat**
 
 ---
 
-## 7. Development Plan
+## 8. Variable-Frequency Operation
 
-The project is being developed incrementally.
+A major characteristic of bang-bang control is that the switching frequency is **not fixed**:
+
+$$
+f_{SW} = f(V_{IN}, V_{OUT}, I_{OUT}, L, C, V_{HYS})
+$$
+
+Changing any of the following can change the switching frequency:
+
+- Input voltage
+- Load current
+- Inductance
+- Output capacitance
+- Hysteresis window
+- Component ESR
+- Propagation delay
+
+One objective of this project is to characterize how the switching frequency changes with operating conditions.
+
+| Test | Expected observation |
+|---|---|
+| Increase VIN | Switching behavior changes |
+| Increase load | Switching frequency/duty behavior changes |
+| Increase COUT | Slower VOUT movement |
+| Increase hysteresis | Larger ripple, generally lower switching frequency |
+| Decrease hysteresis | Smaller ripple, potentially much higher switching frequency |
+
+---
+
+## 9. Development Plan
 
 ### Phase 1: Requirements
 - [x] Define input-voltage range
-- [x] Define output voltage
-- [x] Define maximum load
-- [x] Define switching frequency
-- [x] Define voltage/current ripple targets
+- [x] Define nominal output voltage
+- [x] Define load-current range
+- [x] Define hysteresis window
+- [x] Define efficiency target
 
-### Phase 2: Power Stage Design
-- [x] Calculate nominal duty cycle
+### Phase 2: Power Stage
 - [x] Calculate load resistance
-- [x] Define inductor ripple requirement
-- [x] Calculate inductor value
-- [x] Verify continuous conduction mode
-- [x] Calculate output capacitor
-- [x] Calculate input capacitor
+- [x] Select initial inductor
+- [x] Select output capacitor
+- [x] Select input capacitor
 - [x] Select diode
 - [x] Select MOSFET
-- [x] Estimate loss budget
 
 ### Phase 3: Open-Loop Simulation
-- [ ] Build open-loop buck in LTspice
+- [ ] Build buck power stage in LTspice
+- [ ] Apply fixed-duty-cycle gate signal
 - [ ] Verify switching-node voltage
 - [ ] Verify inductor current
 - [ ] Verify output voltage
-- [ ] Compare calculated and simulated ripple
-- [ ] Sweep input voltage
-- [ ] Sweep load
+- [ ] Verify basic power-stage operation
 
-### Phase 4: Feedback
-- [ ] Implement feedback divider
-- [ ] Add voltage reference
-- [ ] Implement error amplifier
-- [ ] Verify error response
+### Phase 4: Bang-Bang Controller
+- [ ] Remove fixed PWM source
+- [ ] Implement hysteretic comparator
+- [ ] Set lower threshold to 4.95 V
+- [ ] Set upper threshold to 5.05 V
+- [ ] Connect comparator output to MOSFET driver
+- [ ] Verify autonomous switching
+- [ ] Verify output regulation
 
-### Phase 5: PWM Controller
-- [ ] Generate PWM ramp
-- [ ] Add error compensation
-- [ ] Add PWM comparator
-- [ ] Verify control voltage versus duty cycle
+### Phase 5: Operating-Point Analysis
+- [ ] Measure average output voltage
+- [ ] Measure output ripple
+- [ ] Measure switching frequency
+- [ ] Measure inductor-current ripple
+- [ ] Verify MOSFET and diode stresses
 
-### Phase 6: Closed-Loop Operation
-- [ ] Close the feedback loop
-- [ ] Verify 5 V regulation
-- [ ] Analyze startup response
-- [ ] Perform load transient test
-- [ ] Perform line transient test
+### Phase 6: Load Transients
+- [ ] Apply 0.1 A → 0.5 A load step
+- [ ] Measure voltage undershoot
+- [ ] Measure recovery time
+- [ ] Apply 0.5 A → 0.1 A load release
+- [ ] Measure voltage overshoot
 
-### Phase 7: Stability
-- [ ] Tune compensation
-- [ ] Analyze overshoot
-- [ ] Analyze settling time
-- [ ] Evaluate loop stability
-- [ ] Investigate loop gain and phase margin
+### Phase 7: Line Transients
+- [ ] Apply 10 V → 14 V input step
+- [ ] Measure output disturbance
+- [ ] Verify recovery
+- [ ] Apply 14 V → 10 V step
+- [ ] Measure output disturbance
 
-### Phase 8: Real Components
-- [ ] Replace ideal switch with MOSFET model
-- [ ] Add realistic diode model
-- [ ] Include inductor DCR
-- [ ] Include capacitor ESR
-- [ ] Evaluate switching losses
+### Phase 8: Hysteresis Study
+- [ ] Test 50 mV window
+- [ ] Test 100 mV window
+- [ ] Test 200 mV window
+- [ ] Compare output ripple
+- [ ] Compare switching frequency
+- [ ] Compare transient response
 
-### Phase 9: Efficiency
+### Phase 9: Real Components
+- [ ] Use MOSFET model
+- [ ] Use Schottky diode model
+- [ ] Add inductor DCR
+- [ ] Add capacitor ESR
+- [ ] Add comparator propagation delay
+- [ ] Add gate-driver delay
+- [ ] Evaluate switching-node ringing
+
+### Phase 10: Efficiency
 - [ ] Calculate input power
 - [ ] Calculate output power
 - [ ] Calculate efficiency
 - [ ] Sweep efficiency versus load
-- [ ] Identify major loss contributors
+- [ ] Identify dominant losses
 
 ---
 
-## 8. Verification Plan
+## 10. Verification Plan
 
 | Test | VIN | Load | Verification |
 |---|---:|---:|---|
-| Nominal operation | 12 V | 0.5 A | 5 V regulation |
-| Light load | 12 V | 0.1 A | Regulation |
-| Minimum VIN | 10 V | 0.5 A | Line regulation |
-| Maximum VIN | 14 V | 0.5 A | Line regulation |
-| Startup | 12 V | 0.5 A | Settling and overshoot |
-| Load step | 12 V | 0.1 → 0.5 A | Transient response |
-| Load release | 12 V | 0.5 → 0.1 A | Transient response |
-| Line transient | 10 → 14 V | 0.5 A | Control response |
-| Full load | 12 V | 0.5 A | Output ripple |
+| Nominal | 12 V | 0.5 A | Output regulation |
+| Light load | 12 V | 0.1 A | Regulation / switching behavior |
+| Minimum VIN | 10 V | 0.5 A | Regulation |
+| Maximum VIN | 14 V | 0.5 A | Regulation |
+| Startup | 12 V | 0.5 A | Overshoot |
+| Load step | 12 V | 0.1 → 0.5 A | Undershoot / recovery |
+| Load release | 12 V | 0.5 → 0.1 A | Overshoot / recovery |
+| Line step | 10 → 14 V | 0.5 A | Regulation |
+| Hysteresis sweep | 12 V | 0.5 A | Ripple vs. frequency |
 | Full load | 12 V | 0.5 A | Efficiency |
 
 ---
 
-## 9. Simulation Results
+## 11. Key Measurements
 
-### Open-Loop Operation
+For every operating condition, the following parameters will be recorded:
 
-*Results will be added after completion of the open-loop power-stage simulation.*
+| Measurement | Symbol |
+|---|---|
+| Average output voltage | $V_{OUT,AVG}$ |
+| Output ripple | $\Delta V_{OUT}$ |
+| Average switching frequency | $f_{SW,AVG}$ |
+| Inductor peak current | $I_{L,PK}$ |
+| Inductor minimum current | $I_{L,MIN}$ |
+| Input power | $P_{IN}$ |
+| Output power | $P_{OUT}$ |
+| Efficiency | $\eta$ |
 
-Planned plots:
-
-- Switching-node voltage
-- Inductor current
-- Output-voltage startup
-- Output ripple
-
-### Closed-Loop Operation
-
-*Results will be added after implementation of the feedback controller.*
-
-Planned plots:
-
-- Output-voltage startup
-- Feedback voltage
-- Error-amplifier output
-- PWM duty cycle
-- Load-step response
-- Line-transient response
+Because switching frequency varies with time, it will be measured over multiple switching cycles rather than from a single period.
 
 ---
 
-## 10. Efficiency Target
+## 12. Efficiency
 
-After nonideal component models are introduced, the initial full-load efficiency target is **η > 85%** at:
-
-- V<sub>IN</sub> = 12 V
-- V<sub>OUT</sub> = 5 V
-- I<sub>OUT</sub> = 0.5 A
-
-The Phase 2 loss budget estimates **≈ 91.6%** (see Section 5.10).
-
-Efficiency will be calculated using:
+Efficiency will be calculated as:
 
 $$
 \eta = \frac{P_{OUT}}{P_{IN}} \times 100\%
 $$
 
-An efficiency versus load-current curve will be generated.
+Initial target: **η > 85%** at:
+
+- $V_{IN} = 12$ V
+- $V_{OUT} \approx 5$ V
+- $I_{OUT} = 0.5$ A
+
+Expected major losses include:
+
+- Schottky diode conduction
+- Inductor DCR
+- MOSFET conduction
+- MOSFET switching
+- Gate-drive losses
 
 ---
 
-## 11. Repository Structure
+## 13. Repository Structure
 
 ```text
-closed-loop-buck-converter/
+bang-bang-buck-converter/
 │
 ├── README.md
 │
 ├── LTSPICE/
 │   ├── 01_open_loop.asc
-│   ├── 02_feedback.asc
-│   ├── 03_closed_loop.asc
-│   └── 04_load_step.asc
+│   ├── 02_bang_bang_ideal.asc
+│   ├── 03_load_transient.asc
+│   ├── 04_line_transient.asc
+│   └── 05_real_components.asc
 │
 ├── calculations/
-│   └── design_calculations.md
+│   └── power_stage_design.md
 │
 ├── results/
 │   ├── switching_node.png
 │   ├── inductor_current.png
-│   ├── startup.png
+│   ├── output_voltage.png
 │   ├── load_transient.png
+│   ├── hysteresis_comparison.png
 │   └── efficiency.png
 │
 └── docs/
@@ -677,7 +438,7 @@ closed-loop-buck-converter/
 
 ---
 
-## 12. Tools
+## 14. Tools
 
 - LTspice
 - GitHub
@@ -685,19 +446,36 @@ closed-loop-buck-converter/
 
 ---
 
-## 13. Project Status
+## 15. Project Status
 
-**Current stage: Open-loop simulation (Phase 3)**
+**Current stage: Open-loop power-stage simulation (Phase 3)**
 
 Next steps:
 
-1. Build the open-loop LTspice model with an ideal switch and the MBRS340 diode (L = 220 µH, C<sub>OUT</sub> = 100 µF, R<sub>LOAD</sub> = 10 Ω, D = 0.44)
-2. Verify the switching-node voltage, inductor current, and output voltage
-3. Compare simulated ripple and inductor-current limits with the Section 5.11 values
-4. Sweep input voltage (10/12/14 V) and load (10/20/50 Ω)
+1. Build the 12 V → 5 V buck power stage in LTspice
+2. Verify the power stage using a fixed gate signal
+3. Replace the fixed PWM source with a hysteretic controller
+4. Use initial thresholds of **4.95 V and 5.05 V**
+5. Plot $V_{OUT}$, $V_{SW}$, $I_L$, and the MOSFET gate signal
+6. Measure the resulting switching frequency
+7. Test VIN = **10 V, 12 V, and 14 V**
+8. Test loads of **10 Ω, 20 Ω, and 50 Ω**
+9. Perform load and line transients
+10. Introduce realistic component losses and delays
 
 ---
 
-## 14. Lessons Learned
+## 16. Lessons Learned
 
-This section will document design decisions, unexpected simulation behavior, debugging steps, and differences between theoretical calculations and simulation results as the project progresses.
+This section will document design decisions, unexpected simulation behavior, debugging steps, and differences between theoretical calculations and LTspice results as the project progresses.
+
+Particular attention will be given to the trade-offs between:
+
+- Hysteresis width
+- Output-voltage ripple
+- Switching frequency
+- Transient response
+- Component parasitics
+- Comparator and gate-driver delay
+
+The project will also compare the simplicity of bang-bang control with the more structured but more complex approach of conventional fixed-frequency voltage-mode PWM control.
