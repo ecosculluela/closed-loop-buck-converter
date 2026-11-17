@@ -401,9 +401,15 @@ The power stage was first verified with a fixed 100 kHz, 44% duty-cycle gate sig
 
 ### 9.2 Bang-Bang Controller: Effect of Ripple Injection (12 V, 10 Ω)
 
-![Bang-bang schematic](results/simulation/02_schematic.png)
+![Bang-bang schematic](Results/Simulations/02_Schematic.png)
 
-![With vs. without ripple injection](results/simulation/02_injection_comparison.png)
+![Bang-bang schematic](Results/Simulations/02_Startup.png)
+
+![Bang-bang schematic](Results/Simulations/02_Injection_Comparison.png)
+
+![Bang-bang schematic](Results/Simulations/02_Steady_State.png)
+
+
 
 | Quantity | Without injection | With injection |
 |---|---:|---:|
