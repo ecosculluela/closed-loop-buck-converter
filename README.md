@@ -374,9 +374,9 @@ All simulations were run in LTspice. The results matched the design calculations
 
 The power stage was first verified with a fixed 100 kHz, 44% duty-cycle gate signal driving an ideal voltage-controlled switch (R<sub>on</sub> = 15 mΩ). No feedback is applied.
 
-![Open-loop schematic](Results/Simulation/01_Schematic.png)
+![Open-loop schematic](Results/Simulations/01_Schematic.png)
 
-![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulation/01_Waveforms.png)
+![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulations/01_Waveforms.png)
 
 | Quantity | Calculated | Simulated | Error |
 |---|---:|---:|---:|
