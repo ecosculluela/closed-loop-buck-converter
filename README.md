@@ -430,17 +430,6 @@ The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was 
 
 ![Bang-bang schematic](Results/Simulations/02_Steady_State.png)
 
-
-
-| Quantity | Without injection | With injection |
-|---|---:|---:|
-| Average V<sub>OUT</sub> | _x V_ | _x V_ |
-| Output ripple | _x mV<sub>pp</sub>_ | _x mV<sub>pp</sub>_ |
-| Switching frequency | _x kHz_ | _x kHz_ |
-| I<sub>L,min</sub> / I<sub>L,peak</sub> | _x / x A_ | _x / x A_ |
-| Startup V<sub>OUT</sub> peak | _x V_ | _x V_ |
-| Operating mode | DCM | CCM |
-
 ### 9.3 Load Transient (12 V, 0.1 → 0.5 → 0.1 A)
 
 ![Load transient](results/simulation/03_load_transient.png)
