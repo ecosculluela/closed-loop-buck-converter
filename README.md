@@ -436,11 +436,28 @@ The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was 
 
 ![Load transient](Results/Simulations/03_Load_Transient.png)
 
-| Quantity | Result |
-|---|---:|
-| Undershoot (step up) | _x mV_ |
-| Overshoot (step down) | _x mV_ |
-| Recovery time | _x µs_ |
+![Load transient](Results/Simulations/03_Load_Step.png)
+
+![Load transient](Results/Simulations/03_Load_Release.png)
+
+
+| Quantity | Load step (0.1 → 0.5 A) | Load release (0.5 → 0.1 A) |
+|---|---:|---:|
+| Instant ESR jump | ≈ −14 mV | ≈ +14 mV |
+| Peak deviation | ≈ −50 mV (−1.0%) | ≈ +55 mV (+1.1%) |
+| Time to peak deviation | ≈ 45 µs | ≈ 45 µs |
+| I<sub>L</sub> slew rate (calculated / simulated) | 32 / ≈ 30 mA/µs | 24 / ≈ 24 mA/µs |
+| Time for I<sub>L</sub> to reach new load | ≈ 40 µs | ≈ 45 µs |
+| Operating mode after step | CCM | CCM (I<sub>L,min</sub> ≈ 30 mA) |
+| Steady-state V<sub>OUT</sub> shift (0.1 A ↔ 0.5 A) | ≈ 50 mV (≈ 1%) | |
+
+**Observations:**
+
+- **Immediate response:** At the load edge, V<sub>OUT</sub> jumps by ≈ 14 mV, which matches ΔI × ESR (0.4 A × 30 mΩ = 12 mV).
+- **Inductor slew:** I<sub>L</sub> ramps at ≈ 30 mA/µs on the step and ≈ 24 mA/µs on the release, matching (V<sub>IN</sub> − V<sub>OUT</sub>)/L and (V<sub>OUT</sub> + V<sub>D</sub>)/L. The response is limited by the inductor, not by a loop bandwidth.
+- **Peak deviation:** It is ≈ ±50 mV (≈ 1%), well inside the 10% transient target. It is slightly larger than the hand estimate because the controller keeps switching during the transient instead of holding the switch fully on or off, so I<sub>L</sub> rises in steps.
+- **Load regulation:** V<sub>OUT</sub> settles ≈ 50 mV lower at 0.5 A than at 0.1 A. This comes from the ripple-injection offset, which depends on the operating point.
+- **Settling:** After the inductor current reaches the new load, V<sub>OUT</sub> drifts slowly towardt (R<sub>inj</sub>·C<sub>inj</sub> = 1.5 ms). Final settling and recovery time will be measured with a longer simulation window.
 
 ### 9.4 Line Transient (10 → 14 → 10 V, 0.5 A)
 
