@@ -434,7 +434,7 @@ The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was 
 
 ### 9.3 Load Transient (12 V, 0.1 → 0.5 → 0.1 A)
 
-![Load transient](results/simulation/03_load_transient.png)
+![Load transient](Results/Simulations/03_Load_Transient.png)
 
 | Quantity | Result |
 |---|---:|
