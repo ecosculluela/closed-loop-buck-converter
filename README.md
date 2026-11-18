@@ -377,7 +377,6 @@ The power stage was first verified with a fixed 100 kHz, 44% duty-cycle gate sig
 ![Open-loop schematic](Results/Simulations/01_Schematic.png)
 
 ![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulations/01_Waveforms.png)
-![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulations/01_Waveforms.png)
 
 
 | Quantity | Calculated | Simulated | Error |
