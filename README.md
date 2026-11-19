@@ -461,12 +461,29 @@ The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was 
 
 ### 9.4 Line Transient (10 → 14 → 10 V, 0.5 A)
 
-![Line transient](results/simulation/04_line_transient.png)
+The line-transient response was evaluated by stepping the input voltage from 10 V to 14 V and back to 10 V while maintaining a constant 10 Ω load and keeping ripple injection enabled.
+
+<br>
+
+![Line transient](results/simulation/04_Line_Transient.png)
+
+<br>
 
 | Quantity | 10 V | 14 V |
 |---|---:|---:|
-| Average V<sub>OUT</sub> | _x V_ | _x V_ |
-| Switching frequency | _x kHz_ | _x kHz_ |
+| Average V<sub>OUT</sub> | ≈ 5.00 V | ≈ 5.02 V |
+| Switching frequency | TBD | TBD |
+| I<sub>L,min</sub> | ≈ 0.445 A | ≈ 0.447 A |
+| I<sub>L,peak</sub> | ≈ 0.555 A | ≈ 0.558 A |
+| Inductor ripple | ≈ 110 mA<sub>pp</sub> | ≈ 111 mA<sub>pp</sub> |
+
+**Observations:**
+
+- **Line regulation:** V<sub>OUT</sub> remains close to 5 V while V<sub>IN</sub> changes between 10 V and 14 V, demonstrating closed-loop rejection of input-voltage variations.
+- **Inductor current:** The average inductor current remains approximately 0.5 A because the load is held constant at 10 Ω. The converter remains in CCM throughout the test.
+- **Inductor-current slope:** Increasing V<sub>IN</sub> increases the positive current slope according to `(V_IN − V_OUT)/L`. The controller compensates by changing the switching behavior rather than allowing V<sub>OUT</sub> to follow V<sub>IN</sub>.
+- **Output-voltage shift:** A small operating-point shift is visible between the 10 V and 14 V conditions. This is consistent with the operating-point dependence of the ripple-injection network.
+- **Regulation range:** Across the complete 10–14 V input-voltage range, V<sub>OUT</sub> remains approximately within 4.99–5.03 V in the simulated waveform.
 
 ### 9.5 PCB-Level Circuit (12 V, 10 Ω)
 
