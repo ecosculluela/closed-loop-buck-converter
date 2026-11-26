@@ -2,7 +2,9 @@
 
 Design, LTspice simulation, and PCB implementation of a closed-loop nonsynchronous buck converter using **bang-bang (hysteretic) voltage control** with **ripple injection**.
 
-This project was created to put into practice and further develop the power electronics knowledge I have gained throughout my professional career. Starting from first principles, I designed the buck converter power stage, implemented a hysteretic feedback controller, and verified it in LTspice. The next step is to build and test a PCB to compare real hardware against simulation.
+This project was created to put into practice and further develop the power-electronics knowledge I have gained throughout my professional career. Starting from first principles, I designed the buck-converter power stage, implemented a hysteretic feedback controller, and verified its operation in LTspice.
+
+The next stage of the project is to replace the remaining generic simulation components with selected real components, design the PCB, and compare measured hardware behavior against the simulation.
 
 The main objective is to demonstrate how a simple nonlinear controller can regulate the output voltage **without an error amplifier, compensation network, PWM ramp, or fixed-frequency PWM modulator**.
 
@@ -16,9 +18,13 @@ The main objective is to demonstrate how a simple nonlinear controller can regul
 - Understand MOSFET, diode, inductor, and capacitor behavior
 - Implement a bang-bang / hysteretic controller
 - Define upper and lower switching thresholds
+- Implement ripple injection for predictable switching behavior
 - Observe the resulting variable switching frequency
-- Evaluate startup, load-transient, and input-voltage-transient behavior
+- Evaluate startup behavior
+- Evaluate load-transient response
+- Evaluate input-voltage-transient response
 - Analyze component losses and converter efficiency
+- Replace ideal components with realistic component models
 - Design, assemble, and test a PCB prototype
 - Compare calculated, simulated, and measured results
 
@@ -41,19 +47,19 @@ The main objective is to demonstrate how a simple nonlinear controller can regul
 | Topology | Nonsynchronous buck |
 | Target efficiency | > 85% |
 
-The controller regulates the output inside the hysteresis window:
+The controller regulates the output around the nominal 5 V operating point using a hysteretic window:
 
 $$
 4.95\ \text{V} \le V_{OUT} \le 5.05\ \text{V}
 $$
 
-Unlike a conventional fixed-frequency PWM controller, **switching frequency is not specified as a control requirement**. It is an outcome of the power stage, load, input voltage, and hysteresis window.
+Unlike a conventional fixed-frequency PWM controller, **switching frequency is not specified as a control requirement**. It is an outcome of the power stage, input voltage, load, hysteresis network, ripple-injection network, and circuit delays.
 
 ---
 
 ## 3. Control Principle
 
-The controller uses two output-voltage thresholds:
+The controller uses two equivalent output-voltage thresholds:
 
 $$
 V_{LOW} = 4.95\ \text{V}
@@ -79,83 +85,132 @@ otherwise:
 The difference between the two thresholds creates hysteresis:
 
 $$
-V_{HYS} = V_{HIGH} - V_{LOW} = 5.05 - 4.95 = 100\ \text{mV}
+V_{HYS}=V_{HIGH}-V_{LOW}
 $$
 
-The output therefore oscillates around approximately 5 V.
+$$
+V_{HYS}=5.05-4.95=100\ \text{mV}
+$$
+
+Because the feedback divider scales VOUT by approximately 5:1, the corresponding comparator-input hysteresis window is approximately:
+
+$$
+\frac{100\ \text{mV}}{5}=20\ \text{mV}
+$$
+
+or approximately ±10 mV around the nominal 1 V feedback level.
+
+In the practical implementation, the switching decision is made from the **feedback voltage plus the injected ripple**, rather than from VOUT alone.
 
 ---
 
 ## 4. Converter Architecture
 
 ```text
-                      POWER STAGE
+                        POWER STAGE
 
-VIN ── MOSFET ── SW ── Inductor ───── VOUT
-                 │                      │
-               Diode                 Capacitor
-                 │                      │
-                GND                   Load
-                                        │
-                                       GND
+VIN ── PMOS ── SW ── Inductor ───────── VOUT
+                │                         │
+             Schottky                   COUT
+                │                         │
+               GND                      Load
+                                          │
+                                         GND
 
 
-                     CONTROL LOOP
+                       CONTROL LOOP
 
-     VREF (soft-start ramp)        VOUT ── Divider ──┐
-              │                                       │
-              │              SW ── Ripple injection ──┤
-              │                                       │
-              └──────► Hysteretic Comparator ◄── FB ──┘
-                               │
-                               ▼
-                         Gate Driver
-                               │
-                               ▼
-                            MOSFET
+       Reference / Soft Start
+                 │
+                 ▼
+          Hysteresis Network
+                 │
+                 ▼
+             Comparator ◄──── FB
+                 │              ▲
+                 │              │
+                 │      VOUT ─ Divider
+                 │              ▲
+                 │              │
+                 │       Ripple Injection
+                 │              ▲
+                 │              │
+                 │             SW
+                 ▼
+          NPN Gate Driver
+                 │
+                 ▼
+               PMOS
 ```
 
-This is considerably simpler than the voltage-mode PWM architecture:
+A conventional voltage-mode PWM converter typically requires:
 
 ```text
-Voltage-mode PWM:
-
-VOUT → Divider → Error Amp → Compensation → PWM Comparator → Driver
-
-
-Bang-bang:
-
-VOUT → Divider (+ ripple injection) → Hysteretic Comparator → Driver
+VOUT
+  ↓
+Feedback Divider
+  ↓
+Error Amplifier
+  ↓
+Compensation Network
+  ↓
+PWM Comparator + Ramp
+  ↓
+Gate Driver
+  ↓
+MOSFET
 ```
 
-The simplicity of the control loop is one of the main reasons for selecting this control method for the project.
+This project instead uses:
+
+```text
+VOUT + injected ripple
+          ↓
+      Comparator
+          ↓
+      Gate Driver
+          ↓
+        MOSFET
+```
+
+The simplicity of this control structure is one of the main reasons for selecting hysteretic control for the project.
 
 ---
 
 ## 5. Power Stage
 
-| Component | Selected value / part |
+### 5.1 Design Summary
+
+| Component | Selected value / requirement |
 |---|---|
 | Input voltage | 10–14 V |
 | Nominal input | 12 V |
 | Output voltage | ≈ 5 V |
 | Output current | 0.1–0.5 A |
-| Inductor | 220 µH, DCR ≤ 0.3 Ω, I<sub>sat</sub> ≥ 1 A |
-| Output capacitor | 100 µF, low ESR (≈ 30 mΩ) |
-| Input capacitor | 10 µF ceramic, 25 V |
-| Diode | MBRS340 Schottky (40 V, 3 A) |
-| High-side switch (ideal simulation) | Voltage-controlled switch, R<sub>on</sub> = 15 mΩ |
-| High-side switch (PCB) | P-channel MOSFET, ≥ 30 V, V<sub>GS(max)</sub> ≥ ±20 V |
-| Full-load resistance | 10 Ω |
+| Inductor | 220 µH, Isat ≥ 1 A |
+| Output capacitor | 100 µF, low ESR |
+| Input capacitor | ≥ 10 µF ceramic, 25 V |
+| Rectifier | 40 V Schottky diode |
+| Ideal simulation switch | Voltage-controlled switch, Ron = 15 mΩ |
+| PCB high-side switch | P-channel MOSFET, ≥ 30 V |
+| Nominal full-load resistance | 10 Ω |
 
-These values were inherited from the initial open-loop buck design. Because the bang-bang controller does not enforce a fixed switching frequency, **L, C, hysteresis, and ripple injection** were evaluated together through simulation.
+The original values were derived from the open-loop buck-converter design. Because the hysteretic controller does not impose a fixed switching frequency, **L, C, hysteresis, ripple injection, and operating conditions must be considered together**.
 
-> The PCB uses a P-channel MOSFET because it can be driven from ground with a single NPN transistor. A high-side N-channel MOSFET would need a bootstrap gate driver.
+The PCB architecture uses a P-channel MOSFET for the high-side switch because the device can be turned on by pulling its gate toward ground through an NPN transistor. This avoids the bootstrap supply required by a conventional high-side N-channel MOSFET driver.
 
-### 5.1 Load Resistance
+---
+
+### 5.2 Load Resistance
 
 $$
-R_{LOAD} = \frac{V_{OUT}}{I_{OUT}}
+R_{LOAD}=\frac{V_{OUT}}{I_{OUT}}
+$$
+
+At full load:
+
+$$
+R_{LOAD}=\frac{5}{0.5}=10\ \Omega
 $$
 
 | Load condition | Current | Resistance | Output power |
@@ -164,62 +219,192 @@ $$
 | Half load | 0.25 A | 20 Ω | 1.25 W |
 | Light load | 0.1 A | 50 Ω | 0.5 W |
 
-### 5.2 Open-Loop Design Values (12 V, 10 Ω)
+---
+
+### 5.3 Open-Loop Design Values
+
+For the initial open-loop design at:
+
+- VIN = 12 V
+- VOUT = 5 V
+- RLOAD = 10 Ω
+- fSW = 100 kHz
+
+the calculated operating point was:
 
 | Quantity | Equation | Calculated |
 |---|---|---:|
-| Duty cycle | $D = \frac{V_{OUT} + V_D}{V_{IN} + V_D}$ | 44.0% |
-| Inductor ripple | $\Delta I_L = \frac{(V_{OUT} + V_D)(1 - D)}{L\, f_{SW}}$ | 140 mA<sub>pp</sub> |
-| I<sub>L,min</sub> / I<sub>L,peak</sub> | $I_{OUT} \mp \Delta I_L / 2$ | 0.430 / 0.570 A |
-| Output ripple | $\Delta V_C + \Delta I_L \cdot ESR$ | < 7 mV<sub>pp</sub> |
+| Duty cycle | $D=\frac{V_{OUT}+V_D}{V_{IN}+V_D}$ | 44.0% |
+| Inductor ripple | $\Delta I_L=\frac{(V_{OUT}+V_D)(1-D)}{L f_{SW}}$ | ≈ 140 mApp |
+| IL,min / IL,peak | $I_{OUT}\mp\Delta I_L/2$ | 0.430 / 0.570 A |
+| Output ripple | $\Delta V_C+\Delta I_L\cdot ESR$ | < 7 mVpp |
 | SW low level | $-V_D$ | ≈ −0.5 V |
+
+These calculations served as the starting point for the closed-loop design.
 
 ---
 
 ## 6. Bang-Bang Controller
 
-The controller determines the MOSFET state directly from the feedback voltage.
+The controller determines the MOSFET state directly from the feedback signal.
 
-### MOSFET ON
+### 6.1 MOSFET ON
 
-When $V_{OUT} < V_{LOW}$, the MOSFET turns ON. Inductor current increases and energy is transferred from the input supply to the load and output capacitor.
+When the feedback signal reaches the lower switching threshold, the controller turns the PMOS ON.
 
-### MOSFET OFF
-
-When $V_{OUT} > V_{HIGH}$, the MOSFET turns OFF. The inductor current freewheels through the Schottky diode and begins decreasing.
-
-### Hysteresis region
-
-When $V_{LOW} < V_{OUT} < V_{HIGH}$, the comparator retains its previous state. This prevents rapid switching around a single reference voltage.
-
-### 6.1 Feedback Divider
+The inductor voltage becomes approximately:
 
 $$
-V_{FB} = V_{OUT} \times \frac{R_{BOT}}{R_{TOP} + R_{BOT}}
+V_L=V_{IN}-V_{OUT}
 $$
 
-With $R_{TOP} = 40.2\ \text{k}\Omega$ and $R_{BOT} = 10\ \text{k}\Omega$, $V_{FB} \approx V_{OUT}/5$.
+and the inductor current rises at:
 
-A 100 mV window at $V_{OUT}$ is therefore a 20 mV window at FB (0.99–1.01 V).
+$$
+\frac{dI_L}{dt}=\frac{V_{IN}-V_{OUT}}{L}
+$$
 
-### 6.2 Reference (VREF) and Soft-Start
+Energy is transferred from the input supply to the inductor, load, and output capacitor.
 
-The reference sets the regulation target: the comparator switches based on $V_{REF} - V_{FB}$, so $V_{REF} = 1.0\ \text{V}$ gives $V_{OUT} = 5.0\ \text{V}$.
+### 6.2 MOSFET OFF
 
-The reference also provides **soft-start**. If $V_{REF}$ were 1 V at power-up, the switch would stay fully on until $V_{OUT}$ reached 5 V, and the LC charging current could reach several amps. Ramping the reference from 0 to 1 V over a few milliseconds makes $V_{OUT}$ follow a slowly rising target and keeps the startup inductor current close to its steady-state value.
+When the feedback signal reaches the upper threshold, the PMOS turns OFF.
+
+The inductor current then freewheels through the Schottky diode.
+
+The approximate inductor voltage is:
+
+$$
+V_L=-(V_{OUT}+V_D)
+$$
+
+and therefore:
+
+$$
+\frac{dI_L}{dt}
+=
+-\frac{V_{OUT}+V_D}{L}
+$$
+
+### 6.3 Hysteresis Region
+
+Between the two switching thresholds, the comparator retains its previous output state.
+
+This prevents rapid switching around a single threshold and provides the memory required for hysteretic operation.
+
+---
+
+## 7. Feedback, Reference, and Ripple Injection
+
+### 7.1 Feedback Divider
+
+The output voltage is scaled before reaching the comparator:
+
+$$
+V_{FB}
+=
+V_{OUT}
+\frac{R_{BOT}}{R_{TOP}+R_{BOT}}
+$$
+
+Using:
+
+$$
+R_{TOP}=40.2\text{ k}\Omega
+$$
+
+$$
+R_{BOT}=10\text{ k}\Omega
+$$
+
+gives:
+
+$$
+V_{FB}\approx\frac{V_{OUT}}{5}
+$$
+
+Therefore:
+
+$$
+V_{OUT}=5\text{ V}
+\Rightarrow
+V_{FB}\approx1\text{ V}
+$$
+
+A 100 mV hysteresis window at VOUT corresponds to approximately 20 mV at FB:
+
+$$
+0.99\text{ V}\lesssim V_{FB}\lesssim1.01\text{ V}
+$$
+
+---
+
+### 7.2 Reference and Soft Start
+
+The comparator reference establishes the nominal regulation point.
+
+The simulation uses a reference of approximately:
+
+$$
+V_{REF}=1.0\text{ V}
+$$
+
+which corresponds to:
+
+$$
+V_{OUT}\approx5.0\text{ V}
+$$
+
+after the feedback-divider scaling.
+
+During startup, applying the full reference instantly would command the switch ON continuously until the output approached its regulation point. This can produce excessive inductor current while the output capacitor charges.
+
+To avoid this, the reference is ramped during startup.
 
 | Implementation | Reference |
 |---|---|
-| Simulation | PWL source, 0 → 1.0 V in 3 ms |
-| PCB | 2.5 V shunt reference with soft-start capacitor on the reference node, divided to ≈ 1.0 V |
+| Ideal simulation | PWL source, 0 → 1.0 V in approximately 3 ms |
+| PCB concept | 2.5 V reference, divided to approximately 1 V, with soft-start applied to the reference network |
 
-> The soft-start capacitor goes on the 2.5 V reference node, not on the comparator IN+ pin. A capacitor on IN+ would absorb the hysteresis feedback.
+The soft-start network will be finalized together with the selected real reference and comparator.
 
-### 6.3 Ripple Injection
+---
 
-With a 100 µF low-ESR output capacitor, $V_{OUT}$ lags the inductor current. After the switch turns off, the inductor keeps charging the capacitor, so $V_{OUT}$ overshoots the threshold. The ESR ripple (≈ 0.14 A × 30 mΩ ≈ 4 mV) is too small compared with the 100 mV window to help.
+### 7.3 Ripple Injection
 
-A ripple-injection network fixes this by feeding a signal that follows the inductor current into FB:
+With a 100 µF low-ESR output capacitor, the voltage ripple across COUT is very small.
+
+The ESR-generated ripple is approximately:
+
+$$
+\Delta V_{ESR}
+=
+\Delta I_L\cdot ESR
+$$
+
+For approximately:
+
+$$
+\Delta I_L=0.14\text{ A}
+$$
+
+and:
+
+$$
+ESR=30\text{ m}\Omega
+$$
+
+the resulting ripple is only:
+
+$$
+\Delta V_{ESR}\approx4.2\text{ mV}
+$$
+
+This is far smaller than the 100 mV output-referred hysteresis window.
+
+As a result, pure VOUT hysteresis produces slow and irregular switching.
+
+A ripple-injection network is therefore used:
 
 ```text
 SW ── Rinj 150 kΩ ── X ── Cinj 10 nF ── OUT
@@ -231,79 +416,202 @@ SW ── Rinj 150 kΩ ── X ── Cinj 10 nF ── OUT
 
 | Part | Value | Function |
 |---|---:|---|
-| R<sub>inj</sub> | 150 kΩ | Converts the inductor voltage ($V_{SW} - V_{OUT}$) into a current |
-| C<sub>inj</sub> | 10 nF | Integrates it into a triangle that follows $I_L$ |
-| C<sub>ff</sub> | 10 nF | AC-couples the triangle into FB |
+| Rinj | 150 kΩ | Converts the SW-to-OUT voltage into a small current |
+| Cinj | 10 nF | Integrates the voltage into an approximately triangular signal |
+| Cff | 10 nF | AC-couples the generated ripple into FB |
 
-Design checks:
-
-$$
-\tau = R_{inj} C_{inj} = 1.5\ \text{ms} \gg T_{SW} \approx 10\ \mu\text{s}
-$$
+The injection time constant is:
 
 $$
-\Delta V_{inj} \approx \frac{(V_{IN} - V_{OUT})\, t_{ON}}{R_{inj} C_{inj}} = \frac{7 \times 4.4\ \mu\text{s}}{1.5\ \text{ms}} \approx 20\ \text{mV}_{pp}
+\tau=R_{inj}C_{inj}
 $$
 
 $$
-f_c = \frac{1}{2\pi \,(R_{TOP} \parallel R_{BOT})\, C_{ff}} \approx 2\ \text{kHz} \ll f_{SW}
+\tau
+=
+150\text{ k}\Omega\cdot10\text{ nF}
+=
+1.5\text{ ms}
 $$
 
-The injected triangle (~20 mV<sub>pp</sub>) matches the ±10 mV hysteresis at FB, so the comparator switches on a fast, in-phase signal. The trade-off is a small DC offset at $V_{OUT}$, which can be trimmed with $R_{TOP}$.
-
-### 6.4 Hysteresis Network (PCB)
-
-FB connects to the comparator inverting input (IN−). The non-inverting input (IN+) is driven by a reference divider, with positive feedback from the comparator output.
-
-| Element | Value |
-|---|---|
-| Reference | 2.5 V shunt reference (LM4040-2.5) |
-| Reference divider | R<sub>A</sub> = 2.49 kΩ (top), R<sub>B</sub> = 1.65 kΩ (bottom) → ≈ 0.996 V |
-| Thevenin resistance | R<sub>TH</sub> ≈ 1 kΩ |
-| Hysteresis resistor | R<sub>H</sub> = 249 kΩ, comparator output → IN+ |
-
-With a 0–5 V push-pull comparator output:
+Since:
 
 $$
-\Delta V_{IN+} = 5\ \text{V} \cdot \frac{R_{TH}}{R_{TH} + R_H} \approx 20\ \text{mV}
+1.5\text{ ms}\gg T_{SW}\approx10\ \mu\text{s}
 $$
 
-This places the thresholds at about **4.95 V and 5.05 V** at $V_{OUT}$.
+the network generates an approximately linear ramp during each switching interval.
 
-> With an open-collector comparator, the pull-up resistor adds to R<sub>H</sub> and the network must be recalculated. If R<sub>H</sub> is changed for the hysteresis study, R<sub>inj</sub> may need to be adjusted to keep the injected ripple similar in size to the window.
+At VIN ≈ 12 V:
 
-### 6.5 Gate Driver (PCB)
+$$
+\Delta V_{inj}
+\approx
+\frac{(V_{IN}-V_{OUT})t_{ON}}
+{R_{inj}C_{inj}}
+$$
 
-- Comparator output high → NPN (MMBT3904) pulls the PMOS gate low → PMOS ON
-- ~1 kΩ gate pull-up to VIN turns the PMOS OFF
-- Optional NPN/PNP (MMBT3904/MMBT3906) emitter follower for faster switching
-- If the selected PMOS is rated only ±12 V V<sub>GS</sub>, add a 12 V Zener from gate to source
+Using approximately:
+
+$$
+V_{IN}-V_{OUT}=7\text{ V}
+$$
+
+and:
+
+$$
+t_{ON}\approx4.4\ \mu\text{s}
+$$
+
+gives:
+
+$$
+\Delta V_{inj}
+\approx
+\frac{7\cdot4.4\ \mu\text{s}}
+{1.5\text{ ms}}
+\approx20\text{ mV}_{pp}
+$$
+
+This is comparable with the approximately ±10 mV hysteresis thresholds at FB.
+
+The controller can therefore switch based on a fast signal correlated with the inductor-current ripple instead of waiting for the relatively slow output capacitor voltage to traverse the complete hysteresis window.
 
 ---
 
-## 7. Expected Waveforms
+### 7.4 Hysteresis Network
 
-The project analyzes four main signals.
+FB connects to the comparator inverting input.
 
-### Output voltage
+The non-inverting comparator input is driven by the reference network, with positive feedback from the comparator output establishing the hysteresis.
+
+| Element | Nominal value |
+|---|---:|
+| Reference source | 2.5 V |
+| Reference-divider top resistor | 2.49 kΩ |
+| Reference-divider bottom resistor | 1.65 kΩ |
+| Nominal comparator reference | ≈ 1.0 V |
+| Approximate Thevenin resistance | ≈ 1 kΩ |
+| Hysteresis resistor | 249 kΩ |
+
+For a 0–5 V push-pull comparator:
+
+$$
+\Delta V_{IN+}
+\approx
+5\text{ V}
+\frac{R_{TH}}
+{R_{TH}+R_H}
+$$
+
+Using:
+
+$$
+R_{TH}\approx1\text{ k}\Omega
+$$
+
+and:
+
+$$
+R_H=249\text{ k}\Omega
+$$
+
+gives approximately:
+
+$$
+\Delta V_{IN+}\approx20\text{ mV}
+$$
+
+which corresponds to approximately a 100 mV window when referred back to VOUT through the 5:1 feedback divider.
+
+The final resistor values will be verified using the actual selected comparator because comparator output swing, input bias current, propagation delay, and supply voltage affect the practical thresholds.
+
+---
+
+### 7.5 Gate Driver
+
+The planned PCB uses a P-channel MOSFET as the high-side switch.
+
+The basic driver operates as follows:
 
 ```text
-5.05 V       /¯¯\      /¯¯\
-            /    \    /    \
-5.00 V ----/------\--/------\----
-          /        \/        \
-4.95 V
+Comparator HIGH
+      │
+      ▼
+NPN transistor ON
+      │
+      ▼
+PMOS gate pulled LOW
+      │
+      ▼
+VGS becomes negative
+      │
+      ▼
+PMOS ON
 ```
 
-### MOSFET gate
+When the NPN turns OFF:
 
 ```text
-ON     ┌──────┐        ┌──────┐
-       │      │        │      │
-OFF ───┘      └────────┘      └──
+NPN OFF
+   │
+   ▼
+Gate pull-up pulls PMOS gate toward VIN
+   │
+   ▼
+VGS → 0 V
+   │
+   ▼
+PMOS OFF
 ```
 
-### Switching node
+Initial implementation:
+
+- NPN: MMBT3904
+- Gate pull-up: approximately 1 kΩ
+- Optional complementary MMBT3904/MMBT3906 stage for faster gate charging/discharging
+- Optional gate resistor to control switching edge rate
+- VGS protection added if required by the selected PMOS rating
+
+The final PMOS and gate-driver values will be selected after checking gate charge, switching loss, VGS limits, and driver current.
+
+---
+
+## 8. Expected Waveforms
+
+### Output Voltage
+
+The average output should remain close to 5 V with a relatively small switching ripple.
+
+```text
+VOUT
+          /\/\      /\/\      /\/\
+5 V ─────/────\────/────\────/────\────
+```
+
+The actual VOUT ripple can be significantly smaller than the nominal hysteresis window because the comparator is primarily responding to the **injected FB ripple**, not simply waiting for VOUT itself to move by 100 mV.
+
+### MOSFET Gate
+
+For the P-channel device:
+
+```text
+PMOS OFF             PMOS OFF
+   VIN ──────┐      ┌────────
+             │      │
+             └──────┘
+              PMOS ON
+```
+
+The relevant quantity is:
+
+$$
+V_{GS}=V_G-V_S
+$$
+
+not simply the absolute gate voltage.
+
+### Switching Node
 
 ```text
 VIN     ┌──────┐        ┌──────┐
@@ -311,9 +619,9 @@ VIN     ┌──────┐        ┌──────┐
 0 V  ───┘      └────────┘      └──
 ```
 
-During diode conduction, the switching node falls slightly below ground by approximately the diode forward voltage.
+During diode conduction, SW is clamped slightly below ground by approximately the Schottky forward voltage.
 
-### Inductor current
+### Inductor Current
 
 ```text
         /\        /\        /\
@@ -322,21 +630,28 @@ During diode conduction, the switching node falls slightly below ground by appro
 ─────/      \──/      \──/      \──
 ```
 
-The key behavior to observe is:
+At full load the design is intended to operate in CCM.
 
-**VOUT falls → MOSFET ON → IL rises → VOUT rises → MOSFET OFF → IL falls → VOUT falls → repeat**
+The fundamental energy-transfer sequence is:
+
+**VOUT/FB falls → PMOS ON → IL rises → feedback rises → PMOS OFF → IL falls → feedback falls → repeat**
 
 ---
 
-## 8. Variable-Frequency Operation
+## 9. Variable-Frequency Operation
 
-A major characteristic of bang-bang control is that the switching frequency is **not fixed**:
+A major characteristic of bang-bang control is that switching frequency is **not fixed**.
+
+In general:
 
 $$
-f_{SW} = f(V_{IN}, V_{OUT}, I_{OUT}, L, C, V_{HYS}, R_{inj} C_{inj})
+f_{SW}
+=
+f(V_{IN},V_{OUT},I_{OUT},L,C,V_{HYS},
+R_{inj}C_{inj},ESR,t_{delay},...)
 $$
 
-Changing any of the following can change the switching frequency:
+Changing any of the following can modify the switching frequency:
 
 - Input voltage
 - Load current
@@ -344,239 +659,520 @@ Changing any of the following can change the switching frequency:
 - Output capacitance
 - Hysteresis window
 - Ripple-injection amplitude
-- Component ESR
-- Propagation delay
+- Capacitor ESR
+- MOSFET switching characteristics
+- Comparator propagation delay
+- Gate-driver delay
 
 | Test | Expected observation |
 |---|---|
-| Increase VIN | Higher switching frequency (steeper injected ramp) |
-| Increase load | Switching frequency/duty behavior changes |
+| Increase VIN | Switching frequency changes and generally increases in the simulated design |
+| Increase load | Frequency/duty behavior changes |
 | Increase COUT | Slower VOUT movement |
-| Increase hysteresis | Larger ripple, lower switching frequency |
-| Decrease hysteresis | Smaller ripple, higher switching frequency |
-| Remove ripple injection | Low, irregular switching frequency and large ripple |
+| Increase hysteresis | Usually lower frequency and greater allowed feedback excursion |
+| Decrease hysteresis | Usually higher frequency |
+| Remove ripple injection | Low and irregular frequency with much larger ripple |
+
+The simulation results confirmed the expected variable-frequency behavior. At full load, switching frequency increased from approximately **100 kHz at VIN = 10 V to approximately 125 kHz at VIN = 14 V**.
 
 ---
 
-## 9. Simulation Results
+## 10. Simulation Results
 
-All simulations were run in LTspice. The results matched the design calculations.
+All simulations were performed in LTspice.
 
 | File | Purpose |
 |---|---|
-| `01_open_loop.asc` | Fixed 44% duty cycle, power-stage verification |
-| `02_bang_bang_ideal.asc` | Ideal hysteretic switch, with and without ripple injection |
-| `03_load_transient.asc` | 0.1 → 0.5 → 0.1 A load step |
-| `04_line_transient.asc` | 10 → 14 → 10 V input step |
-| `05_real_components.asc` | PCB-level circuit: PMOS, BJT gate driver, comparator, reference, delays |
+| `01_open_loop.asc` | Fixed 44% duty-cycle power-stage verification |
+| `02_bang_bang_ideal.asc` | Ideal hysteretic controller with and without ripple injection |
+| `03_load_transient.asc` | 0.1 → 0.5 → 0.1 A load transient |
+| `04_line_transient.asc` | 10 → 14 → 10 V line transient |
+| `05_real_components.asc` | Real-component / PCB-oriented simulation |
 
-### 9.1 Open-Loop Power Stage (12 V, 10 Ω, D = 44%)
+---
 
-The power stage was first verified with a fixed 100 kHz, 44% duty-cycle gate signal driving an ideal voltage-controlled switch (R<sub>on</sub> = 15 mΩ). No feedback is applied.
+### 10.1 Open-Loop Power Stage
+
+**Conditions**
+
+- VIN = 12 V
+- RLOAD = 10 Ω
+- fSW = 100 kHz
+- Duty cycle = 44%
+- Ideal voltage-controlled switch with Ron = 15 mΩ
 
 ![Open-loop schematic](Results/Simulations/01_Schematic.png)
 
 ![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulations/01_Waveforms.png)
 
-
-| Quantity | Calculated | Simulated | Error |
+| Quantity | Calculated | Simulated | Difference |
 |---|---:|---:|---:|
-| Switching period / duty cycle | 10 µs / 44.0% | 10 µs / 44% | — |
-| Average V<sub>OUT</sub> | ≈ 5.0 V | 4.956 V | −0.9% |
-| Output ripple | < 7 mV<sub>pp</sub> | ≈ 4.1 mV<sub>pp</sub> | ✅ within target |
-| I<sub>L,min</sub> | 0.430 A | 0.427 A | −0.7% |
-| I<sub>L,peak</sub> | 0.570 A | 0.564 A | −1.1% |
-| Inductor ripple | 140 mA<sub>pp</sub> | ≈ 137 mA<sub>pp</sub> | −2% |
-| Average I<sub>L</sub> | 0.50 A | ≈ 0.495 A | −1% |
-| SW low level | ≈ −0.5 V | ≈ −0.35 V | Lower diode drop than assumed |
-| Operating mode | CCM | CCM | ✅ |
-| Efficiency | ≈ 90% | _from Error Log_ | |
+| Switching period / duty | 10 µs / 44.0% | 10 µs / 44% | — |
+| Average VOUT | ≈ 5.0 V | 4.956 V | −0.9% |
+| Output ripple | < 7 mVpp | ≈ 4.1 mVpp | Within target |
+| IL,min | 0.430 A | 0.427 A | −0.7% |
+| IL,peak | 0.570 A | 0.564 A | −1.1% |
+| Inductor ripple | 140 mApp | ≈ 137 mApp | −2% |
+| Average IL | 0.50 A | ≈ 0.495 A | −1% |
+| SW low level | ≈ −0.5 V | ≈ −0.35 V | Lower diode drop |
+| Operating mode | CCM | CCM | Confirmed |
 
-**Observations:**
+#### Observations
 
-- **Inductor current:** The simulated ripple and current limits agree with the hand calculations within ~2%, and the inductor current never reaches zero, confirming CCM operation.
-- **Volt-second balance:** The rising slope (~137 mA in 4.4 µs) corresponds to ≈ 6.8 V across the inductor ($V_{IN} - V_{OUT}$), and the falling slope (~137 mA in 5.6 µs) to ≈ 5.4 V ($V_{OUT} + V_D$).
-- **Output ripple:** The ripple shows sharp corners at each switching edge, which indicates it is dominated by the output-capacitor ESR (0.137 A × 30 mΩ ≈ 4.1 mV) rather than by the capacitance (≈ 1.7 mV).
-- **Switching node:** During the off-time, SW is clamped to about −0.35 V by the MBRS340, slightly less negative than the 0.5 V assumed in the design.
-- **Output voltage:** The average output is ~0.9% below 5 V because the switch resistance, inductor DCR, and source resistance are not compensated in open loop. This steady-state error motivates the feedback controller.
+- **Inductor current:** The simulated ripple and current limits agree with the hand calculations within approximately 2%.
+- **CCM operation:** The inductor current never reaches zero.
+- **Volt-second balance:** The rising and falling current slopes agree closely with the expected inductor voltages.
+- **Output ripple:** The measured ripple is strongly influenced by capacitor ESR.
+- **Switching node:** During the OFF interval, the diode clamps SW slightly below ground.
+- **Open-loop regulation:** The output settles slightly below 5 V because conduction losses are not corrected by feedback.
 
-### 9.2 Bang-Bang Controller: Effect of Ripple Injection (12 V, 10 Ω)
-
-The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was simulated with and without the ripple-injection network using `.step param INJ list 0 1`.
-
-
-![Bang-bang schematic](Results/Simulations/02_Schematic.png)
-
-![Bang-bang schematic](Results/Simulations/02_Startup.png)
-
-![Bang-bang schematic](Results/Simulations/02_Injection_Comparison.png)
-
-![Bang-bang schematic](Results/Simulations/02_Steady_State.png)
-
-| Quantity | Without injection | With injection |
-|---|---:|---:|
-| V<sub>OUT</sub> range | 4.945–5.160 V | 4.965–4.972 V |
-| Average V<sub>OUT</sub> | ≈ 5.05 V | ≈ 4.97 V |
-| Output ripple | ≈ 215 mV<sub>pp</sub> | ≈ 5 mV<sub>pp</sub> |
-| Switching frequency | ≈ 8.7 kHz | ≈ 105 kHz |
-| I<sub>L,min</sub> / I<sub>L,peak</sub> | 0 / 1.28 A | 0.45 / 0.555 A |
-| Inductor ripple | 1.28 A<sub>pp</sub> | ≈ 105 mA<sub>pp</sub> |
-| Startup V<sub>OUT</sub> peak | _x V_ | _x V_ |
-| Startup I<sub>L</sub> peak | _x A_ | _x A_ |
-| Operating mode | DCM | CCM |
-
-**Observations:**
-
-- **Without injection:** The output overshoots both thresholds, with a ripple of ~215 mV<sub>pp</sub>, more than twice the 100 mV window. The low-ESR output capacitor delays the feedback, so the inductor keeps charging it after the switch turns off. The converter switches at only ~8.7 kHz, and the inductor current swings from 0 to 1.28 A, entering DCM for ~25 µs every cycle and exceeding the 1 A saturation rating.
-- **With injection:** The injected triangle at FB makes the comparator switch on a fast, in-phase signal. The converter runs at ~105 kHz in CCM with an inductor current of 0.45–0.555 A, close to the open-loop design (Section 9.1).
-- **Ripple:** The output ripple drops to ~5 mV<sub>pp</sub>, well below the 100 mV hysteresis window. Switching is now set by the injected ripple at FB rather than by V<sub>OUT</sub>, so the output only shows the small ESR ripple.
-- **DC offset:** The average output settles at ~4.97 V (−0.6%), within the 4.95–5.05 V band. The small offset comes from the injected ripple and can be trimmed with R<sub>TOP</sub>
-
-### 9.3 Load Transient (12 V, 0.1 → 0.5 → 0.1 A)
-
-![Load transient](Results/Simulations/03_Load_Transient.png)
-
-![Load transient](Results/Simulations/03_Load_Step.png)
-
-![Load transient](Results/Simulations/03_Load_Release.png)
-
-
-| Quantity | Load step (0.1 → 0.5 A) | Load release (0.5 → 0.1 A) |
-|---|---:|---:|
-| Instant ESR jump | ≈ −14 mV | ≈ +14 mV |
-| Peak deviation | ≈ −50 mV (−1.0%) | ≈ +55 mV (+1.1%) |
-| Time to peak deviation | ≈ 45 µs | ≈ 45 µs |
-| I<sub>L</sub> slew rate (calculated / simulated) | 32 / ≈ 30 mA/µs | 24 / ≈ 24 mA/µs |
-| Time for I<sub>L</sub> to reach new load | ≈ 40 µs | ≈ 45 µs |
-| Operating mode after step | CCM | CCM (I<sub>L,min</sub> ≈ 30 mA) |
-| Steady-state V<sub>OUT</sub> shift (0.1 A ↔ 0.5 A) | ≈ 50 mV (≈ 1%) | |
-
-**Observations:**
-
-- **Immediate response:** At the load edge, V<sub>OUT</sub> jumps by ≈ 14 mV, which matches ΔI × ESR (0.4 A × 30 mΩ = 12 mV).
-- **Inductor slew:** I<sub>L</sub> ramps at ≈ 30 mA/µs on the step and ≈ 24 mA/µs on the release, matching (V<sub>IN</sub> − V<sub>OUT</sub>)/L and (V<sub>OUT</sub> + V<sub>D</sub>)/L. The response is limited by the inductor, not by a loop bandwidth.
-- **Peak deviation:** It is ≈ ±50 mV (≈ 1%), well inside the 10% transient target. It is slightly larger than the hand estimate because the controller keeps switching during the transient instead of holding the switch fully on or off, so I<sub>L</sub> rises in steps.
-- **Load regulation:** V<sub>OUT</sub> settles ≈ 50 mV lower at 0.5 A than at 0.1 A. This comes from the ripple-injection offset, which depends on the operating point.
-- **Settling:** After the inductor current reaches the new load, V<sub>OUT</sub> drifts slowly towardt (R<sub>inj</sub>·C<sub>inj</sub> = 1.5 ms). Final settling and recovery time will be measured with a longer simulation window.
-
-### 9.4 Line Transient (10 → 14 → 10 V, 0.5 A)
-
-The line-transient response was evaluated by stepping the input voltage from 10 V to 14 V and back to 10 V while maintaining a constant 10 Ω load and keeping ripple injection enabled.
-
-<br>
-
-![Line transient](Results/Simulations/04_Line_Transient.png)
-
-<br>
-
-| Quantity | 10 V | 14 V |
-|---|---:|---:|
-| Average V<sub>OUT</sub> | ≈ 5.00 V | ≈ 5.02 V |
-| Switching frequency | ~100kHz | ~125kHz |
-| I<sub>L,min</sub> | ≈ 0.445 A | ≈ 0.447 A |
-| I<sub>L,peak</sub> | ≈ 0.555 A | ≈ 0.558 A |
-| Inductor ripple | ≈ 110 mA<sub>pp</sub> | ≈ 111 mA<sub>pp</sub> |
-
-**Observations:**
-
-- **Line regulation:** V<sub>OUT</sub> remains close to 5 V while V<sub>IN</sub> changes between 10 V and 14 V, demonstrating closed-loop rejection of input-voltage variations.
-- **Inductor current:** The average inductor current remains approximately 0.5 A because the load is held constant at 10 Ω. The converter remains in CCM throughout the test.
-- **Inductor-current slope:** Increasing V<sub>IN</sub> increases the positive current slope according to `(V_IN − V_OUT)/L`. The controller compensates by changing the switching behavior rather than allowing V<sub>OUT</sub> to follow V<sub>IN</sub>.
-- **Output-voltage shift:** A small operating-point shift is visible between the 10 V and 14 V conditions. This is consistent with the operating-point dependence of the ripple-injection network.
-- **Regulation range:** Across the complete 10–14 V input-voltage range, V<sub>OUT</sub> remains approximately within 4.99–5.03 V in the simulated waveform.
-
-### 9.5 PCB-Level Circuit (12 V, 10 Ω)
-
-![PCB-level schematic](results/simulation/05_schematic.png)
-
-![PCB-level waveforms](results/simulation/05_waveforms.png)
-
-| Quantity | Result |
-|---|---:|
-| Average V<sub>OUT</sub> | _x V_ |
-| Output ripple | _x mV<sub>pp</sub>_ |
-| Switching frequency | _x kHz_ |
-| Minimum V<sub>GS</sub> | _x V_ |
-| Efficiency | _x %_ |
-
-> The PCB-level simulation uses generic PMOS, comparator, and reference models. It will be rerun with the vendor models of the selected parts before the PCB is ordered.
+The open-loop result demonstrates why closed-loop regulation is required.
 
 ---
 
-## 10. Hardware Prototype (PCB)
+### 10.2 Effect of Ripple Injection
+
+**Conditions**
+
+- VIN = 12 V
+- RLOAD = 10 Ω
+- Output-referred hysteresis window ≈ 100 mV
+- Comparison performed using:
+
+```spice
+.step param INJ list 0 1
+```
+
+![Bang-bang schematic](Results/Simulations/02_Schematic.png)
+
+![Startup](Results/Simulations/02_Startup.png)
+
+![Ripple-injection comparison](Results/Simulations/02_Injection_Comparison.png)
+
+![Steady-state operation](Results/Simulations/02_Steady_State.png)
+
+| Quantity | Without injection | With injection |
+|---|---:|---:|
+| VOUT range | 4.945–5.160 V | 4.965–4.972 V |
+| Average VOUT | ≈ 5.05 V | ≈ 4.97 V |
+| Output ripple | ≈ 215 mVpp | ≈ 5 mVpp |
+| Switching frequency | ≈ 8.7 kHz | ≈ 105 kHz |
+| IL,min / IL,peak | 0 / 1.28 A | 0.45 / 0.555 A |
+| Inductor ripple | 1.28 App | ≈ 105 mApp |
+| Operating mode | DCM | CCM |
+
+#### Without Ripple Injection
+
+With pure output-voltage hysteresis, the controller waits for the output capacitor voltage to move across the hysteresis band.
+
+The low output-capacitor ESR provides very little immediate current information to the comparator.
+
+Consequently:
+
+- Switching frequency decreases to approximately 8.7 kHz.
+- Output ripple increases to approximately 215 mVpp.
+- The inductor current reaches zero.
+- Peak inductor current rises to approximately 1.28 A.
+- Operation becomes DCM.
+
+This behavior would also create a risk of saturating an inductor selected for approximately 1 A operation.
+
+#### With Ripple Injection
+
+Adding the 150 kΩ / 10 nF / 10 nF ripple-injection network provides a faster signal correlated with inductor-current ripple.
+
+The result is:
+
+- fSW ≈ 105 kHz
+- IL ≈ 0.45–0.555 A
+- ΔIL ≈ 105 mApp
+- VOUT ripple ≈ 5 mVpp
+- CCM operation
+
+The output settles at approximately 4.97 V. The small DC offset results from the operating-point dependence of the feedback and ripple-injection network and can later be trimmed through the feedback-divider design.
+
+---
+
+### 10.3 Load Transient
+
+**Conditions**
+
+- VIN = 12 V
+- Load step = 0.1 A → 0.5 A
+- Load release = 0.5 A → 0.1 A
+- Ripple injection enabled
+
+![Load transient](Results/Simulations/03_Load_Transient.png)
+
+![Load step](Results/Simulations/03_Load_Step.png)
+
+![Load release](Results/Simulations/03_Load_Release.png)
+
+| Quantity | 0.1 → 0.5 A | 0.5 → 0.1 A |
+|---|---:|---:|
+| Instant ESR jump | ≈ −14 mV | ≈ +14 mV |
+| Peak deviation | ≈ −50 mV | ≈ +55 mV |
+| Relative deviation | ≈ −1.0% | ≈ +1.1% |
+| Time to peak | ≈ 45 µs | ≈ 45 µs |
+| IL slew, calculated | ≈ 32 mA/µs | ≈ 24 mA/µs |
+| IL slew, simulated | ≈ 30 mA/µs | ≈ 24 mA/µs |
+| IL response time | ≈ 40 µs | ≈ 45 µs |
+| Final mode | CCM | CCM, IL,min ≈ 30 mA |
+
+#### Observations
+
+- **Immediate ESR response:** The approximately 14 mV instantaneous output step agrees closely with:
+
+$$
+\Delta V_{ESR}
+\approx
+\Delta I\cdot ESR
+$$
+
+- **Inductor slew:** The measured IL slopes agree with the expected voltages across the 220 µH inductor.
+- **Peak deviation:** Output deviation remains around ±1%.
+- **Response mechanism:** Unlike a traditional compensated PWM regulator, the transient is strongly constrained by the physical inductor-current slew rate.
+- **Operating-point shift:** The output settles at slightly different average voltages at 0.1 A and 0.5 A due to the operating-point dependence of the ripple-injection network.
+- **Long-term settling:** The 1.5 ms injection-network time constant introduces a slower component into the final settling behavior.
+
+---
+
+### 10.4 Line Transient
+
+The input voltage was stepped:
+
+```text
+10 V → 14 V → 10 V
+```
+
+while maintaining:
+
+```text
+RLOAD = 10 Ω
+IOUT ≈ 0.5 A
+INJ = 1
+```
+
+The LTspice source was configured as:
+
+```spice
+PULSE(10 14 10m 1u 1u 5m 20m)
+```
+
+![Line transient](Results/Simulations/04_Line_Transient.png)
+
+| Quantity | VIN = 10 V | VIN = 14 V |
+|---|---:|---:|
+| Average VOUT | ≈ 5.00 V | ≈ 5.02 V |
+| Switching frequency | ≈ 100 kHz | ≈ 125 kHz |
+| IL,min | ≈ 0.445 A | ≈ 0.447 A |
+| IL,peak | ≈ 0.555 A | ≈ 0.558 A |
+| Inductor ripple | ≈ 110 mApp | ≈ 111 mApp |
+| Operating mode | CCM | CCM |
+
+#### Observations
+
+- **Line regulation:** VOUT remains close to 5 V while VIN changes by 40%, from 10 V to 14 V.
+- **Average inductor current:** The average remains approximately 0.5 A because the 10 Ω load remains constant.
+- **Current ripple:** Inductor ripple changes very little, from approximately 110 mApp to 111 mApp.
+- **Switching frequency:** The switching frequency increases from approximately 100 kHz at VIN = 10 V to approximately 125 kHz at VIN = 14 V.
+- **Current slope:** Increasing VIN increases the positive IL slope according to:
+
+$$
+\frac{dI_L}{dt}
+=
+\frac{V_{IN}-V_{OUT}}{L}
+$$
+
+- **Variable-frequency behavior:** Instead of allowing VOUT to rise significantly with VIN, the hysteretic controller changes its switching timing.
+- **Operating-point offset:** VOUT changes slightly with VIN because the amplitude and timing of the injected ripple are input-voltage dependent.
+- **Regulation range:** Across the complete 10–14 V line test, VOUT remains approximately within 4.99–5.03 V.
+
+This test demonstrates one of the defining behaviors of the converter: **output voltage and inductor ripple remain relatively stable while switching frequency changes with input voltage.**
+
+---
+
+### 10.5 Real-Component / PCB-Level Simulation
+
+The next simulation stage replaces the remaining idealized components with devices and parasitics representative of the final PCB.
+
+![PCB-level schematic](Results/Simulations/05_Schematic.png)
+
+![PCB-level waveforms](Results/Simulations/05_Waveforms.png)
+
+The circuit will include:
+
+- Real PMOS model
+- Real Schottky model
+- Inductor DCR
+- Capacitor ESR
+- Real comparator behavior
+- Comparator propagation delay
+- BJT gate-driver behavior
+- Gate capacitance and gate resistance
+- Reference startup behavior
+- PCB-relevant parasitics where useful
+
+The final results will be recorded here:
+
+| Quantity | Result |
+|---|---:|
+| Average VOUT | TBD |
+| Output ripple | TBD |
+| Switching frequency | TBD |
+| Minimum VGS | TBD |
+| Peak IL | TBD |
+| Input power | TBD |
+| Output power | TBD |
+| Efficiency | TBD |
+
+The real-component simulation will be run at minimum, nominal, and maximum VIN before the PCB is ordered.
+
+---
+
+## 11. Hardware Component Selection
+
+The final PCB components are selected based on the simulated operating conditions rather than only their nominal current and voltage ratings.
+
+### 11.1 Electrical Stress Summary
+
+The simulation currently indicates approximately:
+
+| Stress | Approximate value |
+|---|---:|
+| Maximum VIN | 14 V |
+| Nominal VOUT | 5 V |
+| Maximum load current | 0.5 A |
+| Normal IL,peak | ≈ 0.56 A |
+| Normal ΔIL | ≈ 0.11 A |
+| Switching frequency range observed | ≈ 100–125 kHz |
+| Maximum output power | 2.5 W |
+
+Adequate design margin will be used for voltage, current, temperature, startup, and switching transients.
+
+### 11.2 Component Requirements
+
+| Component | Requirement |
+|---|---|
+| PMOS | ≥ 30 V VDS, adequate ±VGS rating, low RDS(on), moderate Qg |
+| Schottky diode | ≥ 40 V VRRM, ≥ 1 A continuous capability |
+| Inductor | 220 µH, Isat ≥ 1 A, low DCR |
+| COUT | 100 µF nominal, adequate ESR/ripple-current rating |
+| CIN | ≥ 10 µF ceramic plus local HF bypass |
+| Comparator | Push-pull output preferred, sufficiently fast propagation delay |
+| Reference | Stable reference allowing ≈1 V comparator threshold |
+| LDO | Accepts 14 V maximum VIN with margin and provides 5 V control rail |
+| Gate driver | NPN level shift suitable for PMOS gate voltage and charge |
+| Passives | Tolerances selected to preserve feedback and hysteresis accuracy |
+
+Exact manufacturer part numbers will be frozen after their SPICE models and electrical behavior have been verified in the real-component simulation.
+
+---
+
+## 12. Hardware Prototype
 
 A 2-layer PCB will be designed in KiCad to validate the LTspice results on real hardware.
 
-### 10.1 Hardware Architecture
+### 12.1 Hardware Architecture
 
 ```text
-VIN (10–14 V) ──┬── LDO (5 V) ── powers comparator + reference
-                │
-                ├── P-MOSFET (high side) ── SW ── 220 µH ──┬── VOUT ── Load
-                │        ▲                  │  │           │
-                │     Gate driver        Schottky│        100 µF
-                │     (NPN level shift)     │  └─ Rinj/Cinj/Cff ─► FB
-                │        ▲                 GND             │
-                │        │                                GND
-                │   Comparator ◄── FB (VOUT ÷ 5 + injected ripple)
-                │        ▲
-                │   Reference (soft-start) + hysteresis network
+VIN 10–14 V
+     │
+     ├──── 5 V LDO ───────────────┐
+     │                             │
+     │                       Comparator
+     │                             ▲
+     │                             │
+     │                       Reference
+     │
+     └──── PMOS ── SW ── 220 µH ────── VOUT
+              │        │                  │
+              │     Schottky            COUT
+              │        │                  │
+              │       GND                Load
+              │                           │
+              │                          GND
+              │
+             Gate
+              ▲
+              │
+           NPN driver
+              ▲
+              │
+         Comparator
+              ▲
+              │
+             FB
+            ▲  ▲
+            │  │
+       VOUT ÷ 5│
+               │
+          Ripple injection
+               ▲
+               │
+               SW
 ```
 
 | Block | Implementation |
 |---|---|
-| High-side switch | P-channel MOSFET (≥ 30 V, no bootstrap needed) |
-| Gate driver | NPN level shifter with gate pull-up to VIN |
-| Controller | Fast push-pull comparator with resistive hysteresis |
-| Reference | 2.5 V shunt reference, divided to ≈ 1.0 V |
-| Soft-start | Capacitor on the 2.5 V reference node |
-| Feedback | 40.2 kΩ / 10 kΩ divider (VOUT ÷ 5) |
-| Ripple injection | 150 kΩ / 10 nF (≥ 25 V) / 10 nF, R<sub>inj</sub> removable |
+| High-side switch | P-channel MOSFET |
+| Gate driver | NPN level shifter |
+| Controller | Fast comparator with positive-feedback hysteresis |
+| Reference | Precision reference divided to approximately 1 V |
+| Soft start | Controlled reference ramp |
+| Feedback | 40.2 kΩ / 10 kΩ |
+| Ripple injection | 150 kΩ / 10 nF / 10 nF |
 | Controller supply | 5 V LDO from VIN |
-| Rectifier | 40 V, 3 A Schottky |
-
-### 10.2 Startup Protection
-
-- **Soft-start:** reference ramp of a few milliseconds, so $V_{OUT}$ follows a slowly rising target
-- **Current sense:** 0.1 Ω sense resistor with a test point, to measure inductor current and allow a future current limit
-- **Bench supply:** first power-up with a current-limited supply (~0.3 A)
-
-### 10.3 Test Features
-
-- Test points: VIN, VOUT, SW, GATE, FB, comparator output, GND
-- Ground springs or loops for scope probes
-- Current-sense resistor / wire loop for inductor current measurement
-- Removable R<sub>inj</sub> to test the converter with and without ripple injection
-- Selectable hysteresis resistor (50 / 100 / 200 mV windows)
-- Screw terminals for VIN and external load
-- Onboard 10 Ω, 3 W load with jumper
-- LED indicator on VOUT
-
-### 10.4 Layout Guidelines
-
-| Area | Guideline |
-|---|---|
-| Hot loop | C<sub>IN</sub>, MOSFET, and Schottky as close as possible, short wide traces |
-| SW node | Small copper area, kept away from FB |
-| Ripple injection | R<sub>inj</sub> close to SW; short X-node and C<sub>ff</sub> traces into FB |
-| Ground | Solid bottom ground plane; power and signal ground joined near C<sub>OUT</sub> |
-| FB trace | Short, Kelvin-sensed from the C<sub>OUT</sub> pad, divider next to the comparator |
-| Comparator | 100 nF decoupling directly at the supply pin |
-| Board | 2-layer, 1 oz copper, ~50 × 50 mm, 0805 or larger passives |
-
-### 10.5 Bring-Up Procedure
-
-1. **Controller only:** MOSFET not populated; check the 5 V rail, reference, soft-start ramp, and comparator thresholds by sweeping a voltage into FB
-2. **First power-up:** full board at 10 V, 0.3 A current limit, 50 Ω load
-3. **Check waveforms:** GATE, SW, and VOUT on the oscilloscope
-4. **Increase stress:** step to 12 V and 14 V, then to the 10 Ω load
-5. **Run tests:** load step, line step, with/without injection, hysteresis sweep, and efficiency
+| Rectifier | 40 V Schottky |
+| Inductor | 220 µH |
 
 ---
 
-## 11. Development Plan
+### 12.2 Startup Protection
+
+The prototype will include several measures to reduce the risk of destructive startup behavior.
+
+#### Soft Start
+
+The reference will rise over several milliseconds rather than appearing instantly.
+
+This allows VOUT to track a slowly increasing target and reduces startup inductor current.
+
+#### Current Monitoring
+
+A current-sense resistor or measurement provision will be included so inductor/power-stage current can be monitored during initial bring-up.
+
+#### Current-Limited Bench Supply
+
+The first power-up will use a current-limited laboratory supply.
+
+The initial test will use:
+
+```text
+VIN = 10 V
+RLOAD = 50 Ω
+```
+
+before progressing toward full load.
+
+---
+
+### 12.3 Test Features
+
+The PCB should include:
+
+- VIN test point
+- VOUT test point
+- SW test point
+- PMOS GATE test point
+- FB test point
+- Comparator-output test point
+- Reference test point
+- Multiple GND points
+- Scope ground-loop or ground-spring access
+- Current-sense provision
+- Removable Rinj
+- Replaceable/selectable hysteresis resistor
+- Screw terminals for VIN and external load
+- Optional onboard 10 Ω power load
+- Output indicator LED
+
+The removable Rinj allows direct hardware comparison between:
+
+```text
+Ripple injection OFF
+```
+
+and:
+
+```text
+Ripple injection ON
+```
+
+matching the LTspice investigation.
+
+---
+
+### 12.4 Layout Guidelines
+
+| Area | Guideline |
+|---|---|
+| Input hot loop | Keep CIN, PMOS, and Schottky physically close |
+| SW node | Minimize copper area and keep away from FB |
+| Inductor | Place immediately after SW |
+| Output capacitor | Place close to the inductor return/current path |
+| Ripple injection | Keep Rinj close to SW |
+| X node | Keep short and away from noisy copper |
+| FB | Route away from SW and gate-drive traces |
+| Feedback sensing | Kelvin sense from VOUT/COUT |
+| Comparator | Place feedback components and decoupling close to pins |
+| Decoupling | 100 nF ceramic directly at each control IC |
+| Ground | Solid ground plane with careful power/signal return paths |
+| Board | 2-layer, 1 oz copper, approximately 50 × 50 mm |
+
+The switching loop:
+
+```text
+CIN → PMOS → SW → Schottky → CIN
+```
+
+should have particularly low loop area.
+
+---
+
+### 12.5 Bring-Up Procedure
+
+1. **Visual inspection**
+   - Verify component orientation
+   - Check solder joints
+   - Check for VIN-to-GND shorts
+
+2. **Controller-only test**
+   - Leave the PMOS unpopulated or disabled
+   - Apply VIN
+   - Verify 5 V rail
+   - Verify reference
+   - Verify soft-start ramp
+   - Sweep FB manually and verify comparator thresholds
+
+3. **Gate-driver test**
+   - Verify PMOS gate-drive polarity
+   - Measure maximum negative VGS
+   - Verify the PMOS turns fully OFF
+
+4. **Initial power-stage startup**
+   - VIN = 10 V
+   - Current-limited supply
+   - RLOAD = 50 Ω
+   - Monitor VOUT and supply current
+
+5. **Verify switching**
+   - Measure GATE
+   - Measure VGS
+   - Measure SW
+   - Measure VOUT
+
+6. **Increase operating stress**
+   - VIN = 12 V
+   - VIN = 14 V
+   - Load = 20 Ω
+   - Load = 10 Ω
+
+7. **Run validation tests**
+   - Steady state
+   - Startup
+   - Load transient
+   - Line transient
+   - Injection ON/OFF
+   - Hysteresis sweep
+   - Efficiency
+
+---
+
+## 13. Development Plan
 
 ### Phase 1: Requirements
+
 - [x] Define input-voltage range
 - [x] Define nominal output voltage
 - [x] Define load-current range
@@ -584,14 +1180,16 @@ VIN (10–14 V) ──┬── LDO (5 V) ── powers comparator + reference
 - [x] Define efficiency target
 
 ### Phase 2: Power Stage
+
 - [x] Calculate load resistance
-- [x] Select initial inductor
-- [x] Select output capacitor
-- [x] Select input capacitor
-- [x] Select diode
-- [x] Select MOSFET
+- [x] Select initial inductance
+- [x] Select output capacitance
+- [x] Select input capacitance
+- [x] Select diode requirements
+- [x] Define MOSFET requirements
 
 ### Phase 3: Open-Loop Simulation
+
 - [x] Build buck power stage in LTspice
 - [x] Apply fixed-duty-cycle gate signal
 - [x] Verify switching-node voltage
@@ -600,15 +1198,17 @@ VIN (10–14 V) ──┬── LDO (5 V) ── powers comparator + reference
 - [x] Compare calculated and simulated values
 
 ### Phase 4: Bang-Bang Controller
+
 - [x] Remove fixed PWM source
 - [x] Implement hysteretic comparator
-- [x] Set thresholds to 4.95 V / 5.05 V
+- [x] Set equivalent VOUT thresholds to 4.95 V / 5.05 V
 - [x] Add soft-start reference
 - [x] Add ripple-injection network
 - [x] Verify autonomous switching
 - [x] Verify output regulation
 
 ### Phase 5: Operating-Point Analysis
+
 - [x] Measure average output voltage
 - [x] Measure output ripple
 - [x] Measure switching frequency
@@ -616,86 +1216,117 @@ VIN (10–14 V) ──┬── LDO (5 V) ── powers comparator + reference
 - [x] Compare operation with and without ripple injection
 
 ### Phase 6: Load Transients
-- [x] Apply 0.1 A → 0.5 A load step
+
+- [x] Apply 0.1 A → 0.5 A step
 - [x] Measure voltage undershoot
-- [x] Measure recovery time
-- [x] Apply 0.5 A → 0.1 A load release
+- [x] Measure current slew
+- [x] Apply 0.5 A → 0.1 A release
 - [x] Measure voltage overshoot
+- [x] Verify CCM behavior
 
 ### Phase 7: Line Transients
+
 - [x] Apply 10 V → 14 V input step
-- [x] Measure output disturbance
-- [x] Verify recovery
-- [x] Apply 14 V → 10 V step
-- [x] Measure output disturbance
+- [x] Apply 14 V → 10 V input step
+- [x] Verify output regulation
+- [x] Measure switching frequency at VIN = 10 V
+- [x] Measure switching frequency at VIN = 14 V
+- [x] Measure inductor ripple across the VIN range
 
 ### Phase 8: Hysteresis Study
+
 - [ ] Test 50 mV window
 - [ ] Test 100 mV window
 - [ ] Test 200 mV window
 - [ ] Compare output ripple
 - [ ] Compare switching frequency
-- [ ] Compare transient response
+- [ ] Compare transient behavior
 
 ### Phase 9: Real Components
-- [x] Build PCB-level circuit (PMOS, BJT gate driver, comparator, reference)
-- [x] Use Schottky diode model
+
+- [x] Develop PCB-oriented PMOS architecture
+- [x] Add Schottky behavior
 - [x] Add inductor DCR
 - [x] Add capacitor ESR
-- [x] Add comparator propagation delay
-- [x] Add soft-start and verify startup current
-- [ ] Replace generic models with vendor models of the selected parts
+- [x] Include comparator propagation delay
+- [x] Include soft-start
+- [ ] Freeze exact PMOS
+- [ ] Freeze exact comparator
+- [ ] Freeze exact reference
+- [ ] Freeze exact LDO
+- [ ] Freeze exact inductor
+- [ ] Import vendor SPICE models
+- [ ] Verify startup with real models
 - [ ] Evaluate switching-node ringing
+- [ ] Evaluate VGS stress
 
-### Phase 10: Efficiency (Simulation)
-- [x] Calculate input power
-- [x] Calculate output power
-- [x] Calculate efficiency
+### Phase 10: Efficiency Simulation
+
+- [x] Define input-power measurement
+- [x] Define output-power measurement
+- [x] Define efficiency calculation
+- [ ] Measure nominal-load efficiency with final component models
 - [ ] Sweep efficiency versus load
-- [ ] Identify dominant losses
+- [ ] Separate dominant loss contributions
 
 ### Phase 11: PCB Design
-- [ ] Select final PMOS, comparator, reference, and LDO
-- [ ] Draw the schematic in KiCad
-- [ ] Lay out the PCB
-- [ ] Review layout against Section 10.4
-- [ ] Generate Gerbers and BOM
-- [ ] Order the PCB and components
 
-### Phase 12: Hardware Bring-Up and Testing
-- [ ] Assemble the board
-- [ ] Verify the controller with no power stage
-- [ ] First power-up with a current-limited supply
+- [ ] Freeze hardware BOM
+- [ ] Draw schematic in KiCad
+- [ ] Perform ERC
+- [ ] Assign footprints
+- [ ] Lay out PCB
+- [ ] Review switching-loop geometry
+- [ ] Review FB routing
+- [ ] Run DRC
+- [ ] Generate Gerbers
+- [ ] Generate BOM
+- [ ] Order PCB and components
+
+### Phase 12: Hardware Validation
+
+- [ ] Assemble board
+- [ ] Inspect assembly
+- [ ] Verify controller without power-stage switching
+- [ ] Verify gate driver
+- [ ] Perform current-limited first power-up
 - [ ] Measure switching waveforms
-- [ ] Test with and without ripple injection
-- [ ] Run load, line, and hysteresis tests
+- [ ] Measure VOUT ripple
+- [ ] Measure switching frequency
+- [ ] Test line regulation
+- [ ] Test load regulation
+- [ ] Test load transients
+- [ ] Test line transients
+- [ ] Compare injection ON/OFF
+- [ ] Test hysteresis variations
 - [ ] Measure efficiency
-- [ ] Compare hardware results with simulation
+- [ ] Compare hardware against simulation
 
 ---
 
-## 12. Verification Plan
+## 14. Verification Plan
 
-Each test is performed in simulation and will be repeated on the PCB.
+Each major test performed in simulation will eventually be repeated on the PCB.
 
 | Test | VIN | Load | Verification |
 |---|---:|---:|---|
-| Open loop | 12 V | 0.5 A | Power-stage ripple and current limits |
-| Nominal | 12 V | 0.5 A | Output regulation |
-| Light load | 12 V | 0.1 A | Regulation / switching behavior |
-| Minimum VIN | 10 V | 0.5 A | Regulation |
-| Maximum VIN | 14 V | 0.5 A | Regulation |
-| Startup | 12 V | 0.5 A | Overshoot and inrush current |
+| Open loop | 12 V | 0.5 A | Power-stage calculations |
+| Nominal closed loop | 12 V | 0.5 A | Regulation |
+| Light load | 12 V | 0.1 A | Regulation / operating mode |
+| Minimum VIN | 10 V | 0.5 A | Regulation and fSW |
+| Maximum VIN | 14 V | 0.5 A | Regulation and fSW |
+| Startup | 12 V | 0.5 A | Overshoot / peak IL |
 | Load step | 12 V | 0.1 → 0.5 A | Undershoot / recovery |
 | Load release | 12 V | 0.5 → 0.1 A | Overshoot / recovery |
-| Line step | 10 → 14 V | 0.5 A | Regulation |
+| Line step | 10 → 14 V | 0.5 A | Line regulation |
+| Line release | 14 → 10 V | 0.5 A | Line regulation |
 | Ripple injection | 12 V | 0.5 A | With vs. without injection |
 | Hysteresis sweep | 12 V | 0.5 A | Ripple vs. frequency |
-| Full load | 12 V | 0.5 A | Efficiency |
+| Efficiency | 10/12/14 V | 0.1–0.5 A | Loss analysis |
 
 ---
 
-## 13. Key Measurements
+## 15. Key Measurements
 
 | Measurement | Symbol |
 |---|---|
@@ -704,39 +1335,78 @@ Each test is performed in simulation and will be repeated on the PCB.
 | Average switching frequency | $f_{SW,AVG}$ |
 | Inductor peak current | $I_{L,PK}$ |
 | Inductor minimum current | $I_{L,MIN}$ |
+| Inductor ripple | $\Delta I_L$ |
 | Input power | $P_{IN}$ |
 | Output power | $P_{OUT}$ |
 | Efficiency | $\eta$ |
+| Gate-source voltage | $V_{GS}$ |
 
-Because switching frequency varies with time, it is measured over 20 switching cycles rather than from a single period.
+Because hysteretic switching frequency can exhibit cycle-to-cycle variation, the final frequency measurements should preferably be averaged over multiple switching cycles:
+
+$$
+f_{SW,AVG}
+=
+\frac{N}{t_{N+1}-t_1}
+$$
+
+For example, measuring across 20 complete cycles reduces the effect of individual-cycle timing variation.
 
 ---
 
-## 14. Efficiency
+## 16. Efficiency
 
-Efficiency is calculated as:
+Efficiency is calculated from:
 
 $$
-\eta = \frac{P_{OUT}}{P_{IN}} \times 100\%
+\eta
+=
+\frac{P_{OUT}}{P_{IN}}\times100\%
 $$
 
-Target: **η > 85%** at:
+where:
 
-- $V_{IN} = 12$ V
-- $V_{OUT} \approx 5$ V
-- $I_{OUT} = 0.5$ A
+$$
+P_{OUT}
+=
+V_{OUT,AVG}I_{OUT,AVG}
+$$
 
-Expected major losses:
+and:
 
-- Schottky diode conduction
-- Inductor DCR
-- MOSFET conduction
-- MOSFET switching
-- Gate-drive and controller losses
+$$
+P_{IN}
+=
+V_{IN,AVG}I_{IN,AVG}
+$$
+
+The design target is:
+
+$$
+\eta>85\%
+$$
+
+at:
+
+```text
+VIN  = 12 V
+VOUT ≈ 5 V
+IOUT = 0.5 A
+```
+
+Expected major losses include:
+
+- Schottky-diode conduction loss
+- Inductor DCR loss
+- MOSFET conduction loss
+- MOSFET switching loss
+- Gate-drive loss
+- LDO/controller consumption
+
+For the nonsynchronous architecture, diode loss is expected to be significant because the Schottky diode conducts during every MOSFET OFF interval.
 
 ---
 
-## 15. Repository Structure
+## 17. Repository Structure
 
 ```text
 bang-bang-buck-converter/
@@ -749,12 +1419,14 @@ bang-bang-buck-converter/
 │   ├── 02_bang_bang_ideal.asc
 │   ├── 03_load_transient.asc
 │   ├── 04_line_transient.asc
-│   └── 05_real_components.asc
+│   ├── 05_real_components.asc
+│   └── models/
 │
 ├── calculations/
 │   ├── power_stage_design.md
 │   ├── hysteresis_network.md
-│   └── ripple_injection.md
+│   ├── ripple_injection.md
+│   └── loss_analysis.md
 │
 ├── hardware/
 │   ├── kicad/
@@ -766,15 +1438,21 @@ bang-bang-buck-converter/
 │   ├── simulation/
 │   │   ├── 01_Schematic.png
 │   │   ├── 01_Waveforms.png
-│   │   ├── 02_schematic.png
-│   │   ├── 02_injection_comparison.png
-│   │   ├── 03_load_transient.png
-│   │   ├── 04_line_transient.png
-│   │   ├── 05_schematic.png
-│   │   └── 05_waveforms.png
+│   │   ├── 02_Schematic.png
+│   │   ├── 02_Startup.png
+│   │   ├── 02_Injection_Comparison.png
+│   │   ├── 02_Steady_State.png
+│   │   ├── 03_Load_Transient.png
+│   │   ├── 03_Load_Step.png
+│   │   ├── 03_Load_Release.png
+│   │   ├── 04_Line_Transient.png
+│   │   ├── 05_Schematic.png
+│   │   └── 05_Waveforms.png
+│   │
 │   └── hardware/
 │       ├── scope_captures/
-│       └── efficiency.png
+│       ├── transient_tests/
+│       └── efficiency/
 │
 └── docs/
     └── final_report.pdf
@@ -782,62 +1460,288 @@ bang-bang-buck-converter/
 
 ---
 
-## 16. Tools
+## 18. Tools
 
 - LTspice
 - KiCad
 - GitHub
-- Oscilloscope, current-limited bench supply, electronic load
+- Oscilloscope
+- Current-limited laboratory power supply
+- Electronic load
+- Digital multimeter
 - Analytical power-electronics calculations
 
 ---
 
-## 17. Project Status
+## 19. Project Status
 
-**Current stage: Component selection and PCB design (Phase 11)**
+**Current stage: Real-component selection and PCB preparation**
 
-Simulation is complete. The open-loop power stage matches the hand calculations within ~2%.
+### Completed
 
-Next steps:
+- Open-loop buck design
+- Hand calculations
+- Open-loop LTspice verification
+- Closed-loop hysteretic control
+- Soft-start simulation
+- Ripple-injection design
+- Comparison with and without ripple injection
+- Load-transient simulation
+- Line-transient simulation
+- Variable-frequency characterization
 
-1. Add the remaining simulation results (Sections 9.2–9.5)
-2. Run the hysteresis sweep (50 / 100 / 200 mV) in simulation
-3. Select the final PMOS, comparator, reference, and LDO
-4. Rerun the PCB-level simulation with vendor models at 10/12/14 V and 10/50 Ω
-5. Confirm startup inductor current stays below the inductor I<sub>sat</sub>
-6. Draw the schematic and lay out the PCB in KiCad
-7. Order, assemble, and test the board
+The simulated line test currently shows approximately:
+
+```text
+VIN = 10 V  → fSW ≈ 100 kHz
+VIN = 14 V  → fSW ≈ 125 kHz
+```
+
+while the full-load inductor ripple remains approximately:
+
+```text
+ΔIL ≈ 110 mApp
+```
+
+and VOUT remains close to 5 V.
+
+### Next Steps
+
+1. Complete the 50 / 100 / 200 mV hysteresis-window study.
+2. Freeze the final hardware component selection.
+3. Import the selected manufacturer SPICE models into `05_real_components.asc`.
+4. Re-run steady-state tests at VIN = 10, 12, and 14 V.
+5. Re-run full-load and light-load tests.
+6. Re-run startup with realistic gate-drive and comparator delays.
+7. Verify PMOS VGS stress.
+8. Measure simulated efficiency versus load.
+9. Identify the dominant power losses.
+10. Draw the hardware schematic in KiCad.
+11. Lay out and review the PCB.
+12. Manufacture and assemble the board.
+13. Repeat the simulation verification matrix on real hardware.
+14. Compare measured hardware performance against LTspice.
 
 ---
 
-## 18. Lessons Learned
+## 20. Lessons Learned
 
-### Open loop cannot correct for losses
+### Open Loop Cannot Correct for Losses
 
-With a fixed 44% duty cycle, the open-loop converter settled at 4.956 V instead of 5.0 V. The duty cycle was calculated with only the diode drop included, so the switch resistance, inductor DCR, and source resistance produced an uncorrected ~0.9% error. In a real converter, the error would also change with input voltage, load, and temperature. This is the fundamental reason for closing the loop.
+With a fixed 44% duty cycle, the open-loop converter settled at approximately 4.956 V rather than exactly 5 V.
 
-### Output ripple is dominated by ESR, not capacitance
+The original duty-cycle calculation accounted primarily for the diode drop. Realistic switch resistance, inductor DCR, and source resistance introduce additional voltage losses.
 
-The open-loop output ripple (~4.1 mV<sub>pp</sub>) matched the ESR contribution (0.137 A × 30 mΩ) much more closely than the capacitive contribution (~1.7 mV). This also explains why ripple injection is needed: the ESR ripple at the output is far too small to drive a 100 mV hysteresis window.
+Without feedback, those losses create a steady-state output error.
 
-### Ripple injection was required for stable hysteretic operation
+Closed-loop control removes this dependency by changing the switching behavior until the desired output voltage is recovered.
 
-With pure output-voltage hysteresis, the 100 µF low-ESR output capacitor delayed the feedback signal. The converter switched at only a few kHz, the output ripple was much larger than the 100 mV window, and the inductor current dropped to zero each cycle with peaks above the inductor saturation rating.
+---
 
-Adding an R<sub>inj</sub>/C<sub>inj</sub>/C<sub>ff</sub> network (150 kΩ / 10 nF / 10 nF) injected a triangle that follows the inductor current into FB. This restored ~100 kHz CCM operation and reduced the ripple to tens of mV. The injected ripple adds a small DC offset at the output, which can be trimmed with the feedback divider.
+### Output Ripple Can Be Dominated by ESR
 
-### Soft-start is essential with voltage-only feedback
+The open-loop output ripple of approximately 4.1 mVpp closely matched the estimated ESR contribution:
 
-Without a ramped reference, the switch stays fully on at power-up until $V_{OUT}$ reaches the upper threshold. The LC charging current can reach several amps, causing inductor saturation and large overshoot. Ramping the reference over a few milliseconds keeps startup current close to its steady-state value.
+$$
+0.137\text{ A}\times30\text{ m}\Omega
+\approx4.1\text{ mV}
+$$
 
-### Open topics
+This is larger than the purely capacitive contribution.
 
-The following trade-offs will be documented as the project continues:
+This observation is particularly important for hysteretic control because the natural output-voltage ripple can serve as part of the feedback information.
 
-- Hysteresis width vs. ripple and switching frequency
-- Transient response
-- Component parasitics and PCB layout
-- Comparator and gate-driver delay
-- Simulation vs. hardware differences
+With the low ESR used in this design, however, the natural ripple is too small relative to the desired hysteresis window.
 
-The project will also compare the simplicity of bang-bang control with the more structured but more complex approach of conventional fixed-frequency voltage-mode PWM control.
+---
+
+### Ripple Injection Was Critical to the Controller
+
+Without ripple injection:
+
+- fSW ≈ 8.7 kHz
+- VOUT ripple ≈ 215 mVpp
+- IL reaches zero
+- IL,peak ≈ 1.28 A
+- The converter enters DCM
+
+With ripple injection:
+
+- fSW ≈ 105 kHz at the nominal operating point
+- VOUT ripple ≈ 5 mVpp
+- IL ≈ 0.45–0.555 A
+- ΔIL ≈ 105 mApp
+- The converter remains in CCM
+
+The ripple-injection network therefore changed the controller from a slow output-voltage-driven system into a fast hysteretic controller whose switching decision contains information correlated with the inductor-current ripple.
+
+---
+
+### The Hysteresis Window Is Not the Same as Output Ripple
+
+An important result from the simulation is that a 100 mV output-referred hysteresis window does **not** imply that VOUT itself must exhibit 100 mVpp ripple.
+
+With ripple injection, the comparator sees:
+
+```text
+DC feedback voltage + injected AC ripple
+```
+
+The injected component traverses much of the comparator hysteresis window.
+
+Consequently, VOUT only needs to move by a few millivolts before the combined feedback signal reaches the opposite threshold.
+
+This is why the simulation can simultaneously have:
+
+```text
+Equivalent hysteresis window ≈ 100 mV at VOUT
+```
+
+and:
+
+```text
+Actual VOUT ripple ≈ 5 mVpp
+```
+
+---
+
+### Switching Frequency Is an Operating Result, Not a Fixed Input
+
+The simulations showed that switching frequency changes with operating point.
+
+At full load:
+
+$$
+f_{SW}\approx100\text{ kHz}
+$$
+
+at:
+
+$$
+V_{IN}=10\text{ V}
+$$
+
+while:
+
+$$
+f_{SW}\approx125\text{ kHz}
+$$
+
+at:
+
+$$
+V_{IN}=14\text{ V}
+$$
+
+At the same time, the inductor ripple remained approximately constant at 110 mApp.
+
+This is fundamentally different from fixed-frequency PWM control.
+
+The controller determines **when the next transition must occur**, rather than commanding a predefined switching period.
+
+---
+
+### The Inductor Sets a Fundamental Transient-Response Limit
+
+During the load transient, the controller can request additional energy immediately, but the inductor current cannot change instantaneously.
+
+The current slew is constrained by:
+
+$$
+\frac{dI_L}{dt}=\frac{V_L}{L}
+$$
+
+The simulated load-step slew rate agreed closely with the value calculated directly from the voltage across the 220 µH inductor.
+
+This illustrates that even a very fast comparator cannot make the power stage respond faster than the available inductor voltage allows.
+
+---
+
+### Soft Start Is Important in a Voltage-Controlled Power Stage
+
+If the full voltage reference is applied immediately at startup, the controller detects a large voltage error and commands a long MOSFET ON interval.
+
+Since the output capacitor initially has little voltage, the inductor sees almost the complete input voltage.
+
+The resulting startup current can become much larger than the normal steady-state ripple current.
+
+Ramping the reference allows the output target to increase gradually and prevents unnecessary startup current stress.
+
+---
+
+### Line Regulation Demonstrates the Benefit of Closed-Loop Control
+
+During the line-transient test, VIN changed from:
+
+$$
+10\text{ V}\rightarrow14\text{ V}\rightarrow10\text{ V}
+$$
+
+while the output remained close to 5 V.
+
+The controller responded primarily by altering its switching timing:
+
+$$
+f_{SW}:\approx100\text{ kHz}\rightarrow\approx125\text{ kHz}
+$$
+
+rather than allowing the output voltage to follow the input.
+
+This provides a clear demonstration of the difference between the original fixed-duty open-loop converter and the closed-loop hysteretic implementation.
+
+---
+
+### Simulation Is Only the First Part of the Project
+
+The current results demonstrate the operating principle, but an ideal or partially ideal LTspice simulation does not capture every hardware limitation.
+
+The next development stage will investigate:
+
+- MOSFET gate charge
+- Finite switching times
+- Comparator propagation delay
+- Reference tolerances
+- Inductor DCR and saturation
+- Capacitor ESR and tolerance
+- Diode losses
+- Switching-node ringing
+- PCB parasitic inductance
+- Ground bounce
+- Noise coupling into FB
+- Thermal behavior
+
+The final comparison between **hand calculations, ideal simulation, real-component simulation, and measured PCB results** is intended to be the main engineering outcome of the project.
+
+---
+
+## 21. Final Project Goal
+
+The final project should demonstrate the complete development cycle:
+
+```text
+Requirements
+     ↓
+Hand Calculations
+     ↓
+Open-Loop Simulation
+     ↓
+Hysteretic Controller
+     ↓
+Ripple Injection
+     ↓
+Transient Verification
+     ↓
+Real-Component Simulation
+     ↓
+Schematic
+     ↓
+PCB Layout
+     ↓
+Prototype Assembly
+     ↓
+Bench Validation
+     ↓
+Simulation vs. Measurement
+```
+
+The goal is not only to produce a working 5 V converter, but to understand **why the converter behaves the way it does**, how the control architecture interacts with the 
