@@ -472,7 +472,7 @@ The line-transient response was evaluated by stepping the input voltage from 10 
 | Quantity | 10 V | 14 V |
 |---|---:|---:|
 | Average V<sub>OUT</sub> | ≈ 5.00 V | ≈ 5.02 V |
-| Switching frequency | 105kHz | 133kHz |
+| Switching frequency | ~100kHz | ~125kHz |
 | I<sub>L,min</sub> | ≈ 0.445 A | ≈ 0.447 A |
 | I<sub>L,peak</sub> | ≈ 0.555 A | ≈ 0.558 A |
 | Inductor ripple | ≈ 110 mA<sub>pp</sub> | ≈ 111 mA<sub>pp</sub> |
