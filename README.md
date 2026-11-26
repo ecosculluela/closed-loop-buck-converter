@@ -470,6 +470,7 @@ The line-transient response was evaluated by stepping the input voltage from 10 
 
 <br>
 
+
 | Quantity | 10 V | 14 V |
 |---|---:|---:|
 | Average V<sub>OUT</sub> | ≈ 5.00 V | ≈ 5.02 V |
