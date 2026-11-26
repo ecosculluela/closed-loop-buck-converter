@@ -465,7 +465,7 @@ The line-transient response was evaluated by stepping the input voltage from 10 
 
 <br>
 
-![Line transient](Results/Simulations/04_Line_Transient  .png)
+![Line transient](Results/Simulations/04_Line_Transient.png)
 
 <br>
 
