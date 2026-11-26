@@ -464,6 +464,7 @@ The ideal hysteretic controller (±10 mV at FB, ±50 mV at V<sub>OUT</sub>) was 
 The line-transient response was evaluated by stepping the input voltage from 10 V to 14 V and back to 10 V while maintaining a constant 10 Ω load and keeping ripple injection enabled.
 
 <br>
+![Line transient](results/simulation/04_Start_Up_Line_Transient.png)
 
 ![Line transient](results/simulation/04_Line_Transient.png)
 
