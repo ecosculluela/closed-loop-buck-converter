@@ -49,9 +49,7 @@ The main objective is to demonstrate how a simple nonlinear controller can regul
 
 The controller regulates the output around the nominal 5 V operating point using a hysteretic window:
 
-$$
-4.95\ \text{V} \le V_{OUT} \le 5.05\ \text{V}
-$$
+`4.95 V ≤ V_OUT ≤ 5.05 V`
 
 Unlike a conventional fixed-frequency PWM controller, **switching frequency is not specified as a control requirement**. It is an outcome of the power stage, input voltage, load, hysteresis network, ripple-injection network, and circuit delays.
 
@@ -61,13 +59,8 @@ Unlike a conventional fixed-frequency PWM controller, **switching frequency is n
 
 The controller uses two equivalent output-voltage thresholds:
 
-$$
-V_{LOW} = 4.95\ \text{V}
-$$
-
-$$
-V_{HIGH} = 5.05\ \text{V}
-$$
+- `V_LOW = 4.95 V`
+- `V_HIGH = 5.05 V`
 
 The basic switching law is:
 
@@ -84,19 +77,15 @@ otherwise:
 
 The difference between the two thresholds creates hysteresis:
 
-$$
-V_{HYS}=V_{HIGH}-V_{LOW}
-$$
+`V_HYS = V_HIGH - V_LOW`
 
-$$
-V_{HYS}=5.05-4.95=100\ \text{mV}
-$$
+Therefore:
+
+`V_HYS = 5.05 V - 4.95 V = 100 mV`
 
 Because the feedback divider scales VOUT by approximately 5:1, the corresponding comparator-input hysteresis window is approximately:
 
-$$
-\frac{100\ \text{mV}}{5}=20\ \text{mV}
-$$
+`100 mV / 5 = 20 mV`
 
 or approximately ±10 mV around the nominal 1 V feedback level.
 
@@ -203,15 +192,13 @@ The PCB architecture uses a P-channel MOSFET for the high-side switch because th
 
 ### 5.2 Load Resistance
 
-$$
-R_{LOAD}=\frac{V_{OUT}}{I_{OUT}}
-$$
+The load resistance is calculated from:
+
+`R_LOAD = V_OUT / I_OUT`
 
 At full load:
 
-$$
-R_{LOAD}=\frac{5}{0.5}=10\ \Omega
-$$
+`R_LOAD = 5 V / 0.5 A = 10 Ω`
 
 | Load condition | Current | Resistance | Output power |
 |---|---:|---:|---:|
@@ -225,20 +212,20 @@ $$
 
 For the initial open-loop design at:
 
-- VIN = 12 V
-- VOUT = 5 V
-- RLOAD = 10 Ω
-- fSW = 100 kHz
+- `VIN = 12 V`
+- `VOUT = 5 V`
+- `RLOAD = 10 Ω`
+- `f_SW = 100 kHz`
 
 the calculated operating point was:
 
 | Quantity | Equation | Calculated |
 |---|---|---:|
-| Duty cycle | $D=\frac{V_{OUT}+V_D}{V_{IN}+V_D}$ | 44.0% |
-| Inductor ripple | $\Delta I_L=\frac{(V_{OUT}+V_D)(1-D)}{L f_{SW}}$ | ≈ 140 mApp |
-| IL,min / IL,peak | $I_{OUT}\mp\Delta I_L/2$ | 0.430 / 0.570 A |
-| Output ripple | $\Delta V_C+\Delta I_L\cdot ESR$ | < 7 mVpp |
-| SW low level | $-V_D$ | ≈ −0.5 V |
+| Duty cycle | `D = (V_OUT + V_D) / (V_IN + V_D)` | 44.0% |
+| Inductor ripple | `ΔI_L = (V_OUT + V_D)(1 - D) / (L × f_SW)` | ≈ 140 mApp |
+| IL,min / IL,peak | `I_OUT ∓ ΔI_L / 2` | 0.430 / 0.570 A |
+| Output ripple | `ΔV_C + ΔI_L × ESR` | < 7 mVpp |
+| SW low level | `-V_D` | ≈ −0.5 V |
 
 These calculations served as the starting point for the closed-loop design.
 
@@ -254,15 +241,11 @@ When the feedback signal reaches the lower switching threshold, the controller t
 
 The inductor voltage becomes approximately:
 
-$$
-V_L=V_{IN}-V_{OUT}
-$$
+`V_L = V_IN - V_OUT`
 
-and the inductor current rises at:
+and the inductor-current slope is:
 
-$$
-\frac{dI_L}{dt}=\frac{V_{IN}-V_{OUT}}{L}
-$$
+`dI_L/dt = (V_IN - V_OUT) / L`
 
 Energy is transferred from the input supply to the inductor, load, and output capacitor.
 
@@ -274,17 +257,11 @@ The inductor current then freewheels through the Schottky diode.
 
 The approximate inductor voltage is:
 
-$$
-V_L=-(V_{OUT}+V_D)
-$$
+`V_L = -(V_OUT + V_D)`
 
 and therefore:
 
-$$
-\frac{dI_L}{dt}
-=
--\frac{V_{OUT}+V_D}{L}
-$$
+`dI_L/dt = -(V_OUT + V_D) / L`
 
 ### 6.3 Hysteresis Region
 
@@ -300,42 +277,24 @@ This prevents rapid switching around a single threshold and provides the memory 
 
 The output voltage is scaled before reaching the comparator:
 
-$$
-V_{FB}
-=
-V_{OUT}
-\frac{R_{BOT}}{R_{TOP}+R_{BOT}}
-$$
+`V_FB = V_OUT × R_BOT / (R_TOP + R_BOT)`
 
 Using:
 
-$$
-R_{TOP}=40.2\text{ k}\Omega
-$$
-
-$$
-R_{BOT}=10\text{ k}\Omega
-$$
+- `R_TOP = 40.2 kΩ`
+- `R_BOT = 10 kΩ`
 
 gives:
 
-$$
-V_{FB}\approx\frac{V_{OUT}}{5}
-$$
+`V_FB ≈ V_OUT / 5`
 
 Therefore:
 
-$$
-V_{OUT}=5\text{ V}
-\Rightarrow
-V_{FB}\approx1\text{ V}
-$$
+`V_OUT = 5 V → V_FB ≈ 1 V`
 
 A 100 mV hysteresis window at VOUT corresponds to approximately 20 mV at FB:
 
-$$
-0.99\text{ V}\lesssim V_{FB}\lesssim1.01\text{ V}
-$$
+`0.99 V ≲ V_FB ≲ 1.01 V`
 
 ---
 
@@ -345,15 +304,11 @@ The comparator reference establishes the nominal regulation point.
 
 The simulation uses a reference of approximately:
 
-$$
-V_{REF}=1.0\text{ V}
-$$
+`V_REF = 1.0 V`
 
 which corresponds to:
 
-$$
-V_{OUT}\approx5.0\text{ V}
-$$
+`V_OUT ≈ 5.0 V`
 
 after the feedback-divider scaling.
 
@@ -376,29 +331,16 @@ With a 100 µF low-ESR output capacitor, the voltage ripple across COUT is very 
 
 The ESR-generated ripple is approximately:
 
-$$
-\Delta V_{ESR}
-=
-\Delta I_L\cdot ESR
-$$
+`ΔV_ESR = ΔI_L × ESR`
 
 For approximately:
 
-$$
-\Delta I_L=0.14\text{ A}
-$$
-
-and:
-
-$$
-ESR=30\text{ m}\Omega
-$$
+- `ΔI_L = 0.14 A`
+- `ESR = 30 mΩ`
 
 the resulting ripple is only:
 
-$$
-\Delta V_{ESR}\approx4.2\text{ mV}
-$$
+`ΔV_ESR ≈ 0.14 A × 30 mΩ ≈ 4.2 mV`
 
 This is far smaller than the 100 mV output-referred hysteresis window.
 
@@ -422,60 +364,35 @@ SW ── Rinj 150 kΩ ── X ── Cinj 10 nF ── OUT
 
 The injection time constant is:
 
-$$
-\tau=R_{inj}C_{inj}
-$$
+`τ = R_inj × C_inj`
 
-$$
-\tau
-=
-150\text{ k}\Omega\cdot10\text{ nF}
-=
-1.5\text{ ms}
-$$
+Therefore:
+
+`τ = 150 kΩ × 10 nF = 1.5 ms`
 
 Since:
 
-$$
-1.5\text{ ms}\gg T_{SW}\approx10\ \mu\text{s}
-$$
+`1.5 ms >> T_SW ≈ 10 µs`
 
 the network generates an approximately linear ramp during each switching interval.
 
-At VIN ≈ 12 V:
+At `VIN ≈ 12 V`:
 
-$$
-\Delta V_{inj}
-\approx
-\frac{(V_{IN}-V_{OUT})t_{ON}}
-{R_{inj}C_{inj}}
-$$
+`ΔV_inj ≈ (V_IN - V_OUT) × t_ON / (R_inj × C_inj)`
 
 Using approximately:
 
-$$
-V_{IN}-V_{OUT}=7\text{ V}
-$$
-
-and:
-
-$$
-t_{ON}\approx4.4\ \mu\text{s}
-$$
+- `V_IN - V_OUT = 7 V`
+- `t_ON ≈ 4.4 µs`
+- `R_inj × C_inj = 1.5 ms`
 
 gives:
 
-$$
-\Delta V_{inj}
-\approx
-\frac{7\cdot4.4\ \mu\text{s}}
-{1.5\text{ ms}}
-\approx20\text{ mV}_{pp}
-$$
+`ΔV_inj ≈ (7 V × 4.4 µs) / 1.5 ms ≈ 20 mVpp`
 
 This is comparable with the approximately ±10 mV hysteresis thresholds at FB.
 
-The controller can therefore switch based on a fast signal correlated with the inductor-current ripple instead of waiting for the relatively slow output capacitor voltage to traverse the complete hysteresis window.
+The controller can therefore switch based on a fast signal correlated with the inductor-current ripple instead of waiting for the relatively slow output-capacitor voltage to traverse the complete hysteresis window.
 
 ---
 
@@ -496,31 +413,16 @@ The non-inverting comparator input is driven by the reference network, with posi
 
 For a 0–5 V push-pull comparator:
 
-$$
-\Delta V_{IN+}
-\approx
-5\text{ V}
-\frac{R_{TH}}
-{R_{TH}+R_H}
-$$
+`ΔV_IN+ ≈ 5 V × R_TH / (R_TH + R_H)`
 
 Using:
 
-$$
-R_{TH}\approx1\text{ k}\Omega
-$$
-
-and:
-
-$$
-R_H=249\text{ k}\Omega
-$$
+- `R_TH ≈ 1 kΩ`
+- `R_H = 249 kΩ`
 
 gives approximately:
 
-$$
-\Delta V_{IN+}\approx20\text{ mV}
-$$
+`ΔV_IN+ ≈ 20 mV`
 
 which corresponds to approximately a 100 mV window when referred back to VOUT through the 5:1 feedback divider.
 
@@ -605,9 +507,7 @@ PMOS OFF             PMOS OFF
 
 The relevant quantity is:
 
-$$
-V_{GS}=V_G-V_S
-$$
+`V_GS = V_G - V_S`
 
 not simply the absolute gate voltage.
 
@@ -644,12 +544,7 @@ A major characteristic of bang-bang control is that switching frequency is **not
 
 In general:
 
-$$
-f_{SW}
-=
-f(V_{IN},V_{OUT},I_{OUT},L,C,V_{HYS},
-R_{inj}C_{inj},ESR,t_{delay},...)
-$$
+`f_SW = f(V_IN, V_OUT, I_OUT, L, C, V_HYS, R_inj × C_inj, ESR, propagation delay, ...)`
 
 Changing any of the following can modify the switching frequency:
 
@@ -673,7 +568,12 @@ Changing any of the following can modify the switching frequency:
 | Decrease hysteresis | Usually higher frequency |
 | Remove ripple injection | Low and irregular frequency with much larger ripple |
 
-The simulation results confirmed the expected variable-frequency behavior. At full load, switching frequency increased from approximately **100 kHz at VIN = 10 V to approximately 125 kHz at VIN = 14 V**.
+The simulation results confirmed the expected variable-frequency behavior.
+
+At full load:
+
+- `VIN = 10 V → f_SW ≈ 100 kHz`
+- `VIN = 14 V → f_SW ≈ 125 kHz`
 
 ---
 
@@ -703,7 +603,7 @@ All simulations were performed in LTspice.
 
 ![Open-loop schematic](Results/Simulations/01_Schematic.png)
 
-![Open-loop waveforms: V(out), I(L1), V(sw)](Results/Simulations/01_Waveforms.png)
+![Open-loop waveforms](Results/Simulations/01_Waveforms.png)
 
 | Quantity | Calculated | Simulated | Difference |
 |---|---:|---:|---:|
@@ -747,7 +647,7 @@ The open-loop result demonstrates why closed-loop regulation is required.
 
 ![Startup](Results/Simulations/02_Startup.png)
 
-![Ripple-injection comparison](Results/Simulations/02_Injection_Comparison.png)
+![Ripple injection comparison](Results/Simulations/02_Injection_Comparison.png)
 
 ![Steady-state operation](Results/Simulations/02_Steady_State.png)
 
@@ -783,10 +683,10 @@ Adding the 150 kΩ / 10 nF / 10 nF ripple-injection network provides a faster si
 
 The result is:
 
-- fSW ≈ 105 kHz
-- IL ≈ 0.45–0.555 A
-- ΔIL ≈ 105 mApp
-- VOUT ripple ≈ 5 mVpp
+- `f_SW ≈ 105 kHz`
+- `I_L ≈ 0.45–0.555 A`
+- `ΔI_L ≈ 105 mApp`
+- `V_OUT ripple ≈ 5 mVpp`
 - CCM operation
 
 The output settles at approximately 4.97 V. The small DC offset results from the operating-point dependence of the feedback and ripple-injection network and can later be trimmed through the feedback-divider design.
@@ -821,14 +721,7 @@ The output settles at approximately 4.97 V. The small DC offset results from the
 
 #### Observations
 
-- **Immediate ESR response:** The approximately 14 mV instantaneous output step agrees closely with:
-
-$$
-\Delta V_{ESR}
-\approx
-\Delta I\cdot ESR
-$$
-
+- **Immediate ESR response:** The approximately 14 mV instantaneous output step agrees closely with `ΔV_ESR ≈ ΔI × ESR`.
 - **Inductor slew:** The measured IL slopes agree with the expected voltages across the 220 µH inductor.
 - **Peak deviation:** Output deviation remains around ±1%.
 - **Response mechanism:** Unlike a traditional compensated PWM regulator, the transient is strongly constrained by the physical inductor-current slew rate.
@@ -876,14 +769,7 @@ PULSE(10 14 10m 1u 1u 5m 20m)
 - **Average inductor current:** The average remains approximately 0.5 A because the 10 Ω load remains constant.
 - **Current ripple:** Inductor ripple changes very little, from approximately 110 mApp to 111 mApp.
 - **Switching frequency:** The switching frequency increases from approximately 100 kHz at VIN = 10 V to approximately 125 kHz at VIN = 14 V.
-- **Current slope:** Increasing VIN increases the positive IL slope according to:
-
-$$
-\frac{dI_L}{dt}
-=
-\frac{V_{IN}-V_{OUT}}{L}
-$$
-
+- **Current slope:** Increasing VIN increases the positive IL slope according to `dI_L/dt = (V_IN - V_OUT) / L`.
 - **Variable-frequency behavior:** Instead of allowing VOUT to rise significantly with VIN, the hysteretic controller changes its switching timing.
 - **Operating-point offset:** VOUT changes slightly with VIN because the amplitude and timing of the injected ripple are input-voltage dependent.
 - **Regulation range:** Across the complete 10–14 V line test, VOUT remains approximately within 4.99–5.03 V.
@@ -1330,24 +1216,20 @@ Each major test performed in simulation will eventually be repeated on the PCB.
 
 | Measurement | Symbol |
 |---|---|
-| Average output voltage | $V_{OUT,AVG}$ |
-| Output ripple | $\Delta V_{OUT}$ |
-| Average switching frequency | $f_{SW,AVG}$ |
-| Inductor peak current | $I_{L,PK}$ |
-| Inductor minimum current | $I_{L,MIN}$ |
-| Inductor ripple | $\Delta I_L$ |
-| Input power | $P_{IN}$ |
-| Output power | $P_{OUT}$ |
-| Efficiency | $\eta$ |
-| Gate-source voltage | $V_{GS}$ |
+| Average output voltage | `V_OUT,AVG` |
+| Output ripple | `ΔV_OUT` |
+| Average switching frequency | `f_SW,AVG` |
+| Inductor peak current | `I_L,PK` |
+| Inductor minimum current | `I_L,MIN` |
+| Inductor ripple | `ΔI_L` |
+| Input power | `P_IN` |
+| Output power | `P_OUT` |
+| Efficiency | `η` |
+| Gate-source voltage | `V_GS` |
 
 Because hysteretic switching frequency can exhibit cycle-to-cycle variation, the final frequency measurements should preferably be averaged over multiple switching cycles:
 
-$$
-f_{SW,AVG}
-=
-\frac{N}{t_{N+1}-t_1}
-$$
+`f_SW,AVG = N / (t_(N+1) - t_1)`
 
 For example, measuring across 20 complete cycles reduces the effect of individual-cycle timing variation.
 
@@ -1357,33 +1239,19 @@ For example, measuring across 20 complete cycles reduces the effect of individua
 
 Efficiency is calculated from:
 
-$$
-\eta
-=
-\frac{P_{OUT}}{P_{IN}}\times100\%
-$$
+`η = (P_OUT / P_IN) × 100%`
 
 where:
 
-$$
-P_{OUT}
-=
-V_{OUT,AVG}I_{OUT,AVG}
-$$
+`P_OUT = V_OUT,AVG × I_OUT,AVG`
 
 and:
 
-$$
-P_{IN}
-=
-V_{IN,AVG}I_{IN,AVG}
-$$
+`P_IN = V_IN,AVG × I_IN,AVG`
 
 The design target is:
 
-$$
-\eta>85\%
-$$
+`η > 85%`
 
 at:
 
@@ -1542,10 +1410,7 @@ Closed-loop control removes this dependency by changing the switching behavior u
 
 The open-loop output ripple of approximately 4.1 mVpp closely matched the estimated ESR contribution:
 
-$$
-0.137\text{ A}\times30\text{ m}\Omega
-\approx4.1\text{ mV}
-$$
+`0.137 A × 30 mΩ ≈ 4.1 mV`
 
 This is larger than the purely capacitive contribution.
 
@@ -1559,18 +1424,18 @@ With the low ESR used in this design, however, the natural ripple is too small r
 
 Without ripple injection:
 
-- fSW ≈ 8.7 kHz
-- VOUT ripple ≈ 215 mVpp
-- IL reaches zero
-- IL,peak ≈ 1.28 A
+- `f_SW ≈ 8.7 kHz`
+- `V_OUT ripple ≈ 215 mVpp`
+- `I_L` reaches zero
+- `I_L,peak ≈ 1.28 A`
 - The converter enters DCM
 
 With ripple injection:
 
-- fSW ≈ 105 kHz at the nominal operating point
-- VOUT ripple ≈ 5 mVpp
-- IL ≈ 0.45–0.555 A
-- ΔIL ≈ 105 mApp
+- `f_SW ≈ 105 kHz` at the nominal operating point
+- `V_OUT ripple ≈ 5 mVpp`
+- `I_L ≈ 0.45–0.555 A`
+- `ΔI_L ≈ 105 mApp`
 - The converter remains in CCM
 
 The ripple-injection network therefore changed the controller from a slow output-voltage-driven system into a fast hysteretic controller whose switching decision contains information correlated with the inductor-current ripple.
@@ -1589,18 +1454,7 @@ DC feedback voltage + injected AC ripple
 
 The injected component traverses much of the comparator hysteresis window.
 
-Consequently, VOUT only needs to move by a few millivolts before the combined feedback signal reaches the opposite threshold.
-
-This is why the simulation can simultaneously have:
-
-```text
-Equivalent hysteresis window ≈ 100 mV at VOUT
-```
-
-and:
-
-```text
-Actual VOUT ripple ≈ 5 mVpp
+VOUT ripple ≈ 5 mVpp
 ```
 
 ---
@@ -1611,27 +1465,11 @@ The simulations showed that switching frequency changes with operating point.
 
 At full load:
 
-$$
-f_{SW}\approx100\text{ kHz}
-$$
-
-at:
-
-$$
-V_{IN}=10\text{ V}
-$$
+`VIN = 10 V → f_SW ≈ 100 kHz`
 
 while:
 
-$$
-f_{SW}\approx125\text{ kHz}
-$$
-
-at:
-
-$$
-V_{IN}=14\text{ V}
-$$
+`VIN = 14 V → f_SW ≈ 125 kHz`
 
 At the same time, the inductor ripple remained approximately constant at 110 mApp.
 
@@ -1647,9 +1485,7 @@ During the load transient, the controller can request additional energy immediat
 
 The current slew is constrained by:
 
-$$
-\frac{dI_L}{dt}=\frac{V_L}{L}
-$$
+`dI_L/dt = V_L / L`
 
 The simulated load-step slew rate agreed closely with the value calculated directly from the voltage across the 220 µH inductor.
 
@@ -1673,17 +1509,13 @@ Ramping the reference allows the output target to increase gradually and prevent
 
 During the line-transient test, VIN changed from:
 
-$$
-10\text{ V}\rightarrow14\text{ V}\rightarrow10\text{ V}
-$$
+`10 V → 14 V → 10 V`
 
 while the output remained close to 5 V.
 
 The controller responded primarily by altering its switching timing:
 
-$$
-f_{SW}:\approx100\text{ kHz}\rightarrow\approx125\text{ kHz}
-$$
+`f_SW ≈ 100 kHz → 125 kHz`
 
 rather than allowing the output voltage to follow the input.
 
@@ -1744,4 +1576,4 @@ Bench Validation
 Simulation vs. Measurement
 ```
 
-The goal is not only to produce a working 5 V converter, but to understand **why the converter behaves the way it does**, how the control architecture interacts with the 
+The goal is not only to produce a working 5 V converter, but to understand **why the converter behaves the way it does**, how the control architecture interacts with the physical power stage, and how ideal simulation results change when implemented with real components.
